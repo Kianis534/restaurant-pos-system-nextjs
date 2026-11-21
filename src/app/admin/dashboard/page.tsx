@@ -113,7 +113,7 @@ function AdminDashboard() {
               <p className="text-sm text-gray-500">Everything has more than {LOW_STOCK} in stock.</p>
             ) : (
               <ul className="divide-y divide-gray-100">
-                {stats.lowStock.map((p) => (
+                {stats.lowStock.slice(0, 8).map((p) => (
                   <li key={p.id} className="flex items-center justify-between py-2 text-sm">
                     <span>{p.name}</span>
                     <span className={p.quantity <= 0 ? 'font-semibold text-red-600' : 'font-medium text-amber-700'}>
@@ -123,6 +123,7 @@ function AdminDashboard() {
                 ))}
               </ul>
             )}
+            {stats.lowStock.length > 8 && <p className="mt-2 text-sm text-gray-500">and {stats.lowStock.length - 8} more.</p>}
             <LinkButton href="/admin/products" variant="outline" size="sm" className="mt-4">
               Manage menu
             </LinkButton>

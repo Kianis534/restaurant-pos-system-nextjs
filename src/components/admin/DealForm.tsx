@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Product } from '@/types';
 import { storage } from '@/lib/storage';
 import { formatMoney } from '@/lib/format';
-import { validateDeal, type Errors } from '@/lib/validation';
+import { clearError, validateDeal, type Errors } from '@/lib/validation';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -52,7 +52,10 @@ export function DealForm({ deal, products }: { deal?: Product; products: Product
         <form onSubmit={handleSubmit} className="space-y-6" noValidate>
           <div className="grid gap-5 md:grid-cols-2">
             <Field label="Deal name" htmlFor="name" error={errors.name}>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!errors.name} required />
+              <Input id="name" value={name} onChange={(e) => {
+                  setName(e.target.value);
+                  setErrors((current) => clearError(current, 'name'));
+                }} aria-invalid={!!errors.name} required />
             </Field>
             <Field
               label="Deal price (before tax)"
@@ -64,7 +67,10 @@ export function DealForm({ deal, products }: { deal?: Product; products: Product
                   : undefined
               }
             >
-              <Input id="price" type="number" inputMode="decimal" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} aria-invalid={!!errors.price} required />
+              <Input id="price" type="number" inputMode="decimal" min="0" step="0.01" value={price} onChange={(e) => {
+                  setPrice(e.target.value);
+                  setErrors((current) => clearError(current, 'price'));
+                }} aria-invalid={!!errors.price} required />
             </Field>
             <div className="space-y-1.5 md:col-span-2">
               <Label htmlFor="deal-items">Items in the deal</Label>
@@ -74,7 +80,10 @@ export function DealForm({ deal, products }: { deal?: Product; products: Product
                 isMulti
                 options={options}
                 value={options.filter((o) => selected.includes(o.value))}
-                onChange={(next) => setSelected(next.map((o) => o.value))}
+                onChange={(next) => {
+                  setSelected(next.map((o) => o.value));
+                  setErrors((current) => clearError(current, 'items'));
+                }}
                 classNamePrefix="rs"
                 placeholder="Pick two or more items..."
               />

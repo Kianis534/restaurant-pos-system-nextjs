@@ -6,7 +6,7 @@ import type { Category, Product, Settings } from '@/types';
 import { storage } from '@/lib/storage';
 import { unitPrice } from '@/lib/pricing';
 import { formatMoney } from '@/lib/format';
-import { validateProduct, type Errors } from '@/lib/validation';
+import { clearError, validateProduct, type Errors } from '@/lib/validation';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input, Select, Textarea } from '@/components/ui/Input';
@@ -31,11 +31,16 @@ export function ProductForm({ product, categories, settings }: ProductFormProps)
   });
   const [errors, setErrors] = useState<Errors>({});
 
-  const set = (field: keyof typeof values) => (e: { target: { value: string } }) => setValues((v) => ({ ...v, [field]: e.target.value }));
+  const set = (field: keyof typeof values) => (e: { target: { value: string } }) => {
+    setValues((v) => ({ ...v, [field]: e.target.value }));
+    setErrors((current) => clearError(current, field));
+  };
 
-  const preview = Number(values.price) >= 0
+  // Only preview a real number; an empty box would otherwise preview as $0.00.
+  const typedPrice = values.price.trim() === '' ? NaN : Number(values.price);
+  const preview = Number.isFinite(typedPrice) && typedPrice >= 0
     ? unitPrice(
-        { id: product?.id ?? '__new__', name: values.name, category: values.category, price: Number(values.price) || 0, cost: 0, quantity: 0 },
+        { id: product?.id ?? '__new__', name: values.name, category: values.category, price: typedPrice, cost: 0, quantity: 0 },
         { taxRate: settings.taxRate, taxExemptProductIds: settings.taxExemptProductIds, discounts: [] },
       )
     : null;

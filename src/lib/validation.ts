@@ -6,6 +6,19 @@ export type Errors = Record<string, string>;
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+/** Drops one field's error, e.g. as soon as the user edits that field. */
+export function clearError(errors: Errors, field: string): Errors {
+  if (!(field in errors)) return errors;
+  const next = { ...errors };
+  delete next[field];
+  return next;
+}
+
+/** True when a money amount has at most two decimal places (12, 12.5, 12.50 but not 12.505). */
+export function hasAtMostTwoDecimals(value: number): boolean {
+  return Math.abs(value * 100 - Math.round(value * 100)) < 1e-6;
+}
+
 function parseNumber(raw: string | number): number {
   if (typeof raw === 'number') return raw;
   return raw.trim() === '' ? NaN : Number(raw);
@@ -30,7 +43,9 @@ export function validateProduct(input: ProductInput, others: Product[]): Errors 
   else if (others.some((p) => same(p.name, input.name))) errors.name = 'Another menu item already has this name.';
   if (!Number.isFinite(price) || price < 0) errors.price = 'Enter a price of 0 or more.';
   else if (price > 100_000) errors.price = 'That price looks too high.';
+  else if (!hasAtMostTwoDecimals(price)) errors.price = 'Use at most two decimal places.';
   if (!Number.isFinite(cost) || cost < 0) errors.cost = 'Enter a cost of 0 or more.';
+  else if (!hasAtMostTwoDecimals(cost)) errors.cost = 'Use at most two decimal places.';
   if (!Number.isInteger(quantity) || quantity < 0) errors.quantity = 'Stock must be a whole number, 0 or more.';
   if (input.sku && others.some((p) => p.sku && same(p.sku, input.sku ?? ''))) errors.sku = 'Another item already uses this SKU.';
   return errors;
@@ -42,6 +57,7 @@ export function validateDeal(input: { name: string; price: string | number; item
   if (!input.name.trim()) errors.name = 'Name is required.';
   else if (others.some((p) => same(p.name, input.name))) errors.name = 'Another menu item already has this name.';
   if (!Number.isFinite(price) || price <= 0) errors.price = 'Enter a deal price above 0.';
+  else if (!hasAtMostTwoDecimals(price)) errors.price = 'Use at most two decimal places.';
   if (input.items.length < 2) errors.items = 'Pick at least two items for the deal.';
   return errors;
 }

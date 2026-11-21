@@ -6,7 +6,7 @@ import type { Role, StoredUser, User } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { storage } from '@/lib/storage';
 import { hashPassword, MIN_PASSWORD_LENGTH } from '@/lib/password';
-import { validateEmployee, type Errors } from '@/lib/validation';
+import { clearError, validateEmployee, type Errors } from '@/lib/validation';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
@@ -31,8 +31,13 @@ export function EmployeeForm({ employee }: { employee?: User }) {
   });
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+  // Changing your own role would lock you out of this screen the moment you save.
+  const isSelf = !!employee && employee.id === me?.id;
 
-  const set = (field: keyof typeof values) => (e: { target: { value: string } }) => setValues((v) => ({ ...v, [field]: e.target.value }));
+  const set = (field: keyof typeof values) => (e: { target: { value: string } }) => {
+    setValues((v) => ({ ...v, [field]: e.target.value }));
+    setErrors((current) => clearError(current, field));
+  };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -40,7 +45,9 @@ export function EmployeeForm({ employee }: { employee?: User }) {
     const all = storage.getUsers();
     const others = all.filter((u) => u.id !== employee?.id);
     const problems = validateEmployee(values, others, { isNew: !employee });
-    if (employee?.role === 'admin' && values.role !== 'admin' && !others.some((u) => u.role === 'admin')) {
+    if (isSelf && values.role !== employee?.role) {
+      problems.role = "You can't change your own role. Ask another admin.";
+    } else if (employee?.role === 'admin' && values.role !== 'admin' && !others.some((u) => u.role === 'admin')) {
       problems.role = 'This is the only admin. Make someone else an admin first.';
     }
     setErrors(problems);
@@ -101,8 +108,8 @@ export function EmployeeForm({ employee }: { employee?: User }) {
                 required={!employee}
               />
             </Field>
-            <Field label="Role" htmlFor="role" error={errors.role}>
-              <Select id="role" value={values.role} onChange={set('role')} aria-invalid={!!errors.role}>
+            <Field label="Role" htmlFor="role" error={errors.role} hint={isSelf ? "You can't change your own role." : undefined}>
+              <Select id="role" value={values.role} onChange={set('role')} aria-invalid={!!errors.role} disabled={isSelf}>
                 {ROLES.map((r) => (
                   <option key={r.value} value={r.value}>
                     {r.label}

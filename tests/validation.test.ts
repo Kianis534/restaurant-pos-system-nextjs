@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { nextTableName, validateDeal, validateDiscount, validateEmployee, validateName, validateProduct, validateTable } from '@/lib/validation';
+import {
+  clearError,
+  hasAtMostTwoDecimals,
+  nextTableName,
+  validateDeal,
+  validateDiscount,
+  validateEmployee,
+  validateName,
+  validateProduct,
+  validateTable,
+} from '@/lib/validation';
 import type { StoredUser } from '@/types';
 import { products } from './fixtures';
 
@@ -14,6 +24,25 @@ describe('validateProduct', () => {
     expect(validateProduct({ ...good, price: '-1' }, products).price).toBeDefined();
     expect(validateProduct({ ...good, price: '' }, products).price).toBeDefined();
     expect(validateProduct({ ...good, quantity: '1.5' }, products).quantity).toBeDefined();
+  });
+  it('rejects money with more than two decimals', () => {
+    expect(validateProduct({ ...good, price: '4.555' }, products).price).toBe('Use at most two decimal places.');
+    expect(validateProduct({ ...good, cost: '0.001' }, products).cost).toBe('Use at most two decimal places.');
+    expect(validateDeal({ name: 'Lunch', price: '9.999', items: ['burger', 'fries'] }, products).price).toBe('Use at most two decimal places.');
+    expect(validateProduct({ ...good, price: '19.99', cost: '0.10' }, products)).toEqual({});
+  });
+  it('hasAtMostTwoDecimals copes with floating point', () => {
+    expect(hasAtMostTwoDecimals(0.1 + 0.2)).toBe(true);
+    expect(hasAtMostTwoDecimals(12.99)).toBe(true);
+    expect(hasAtMostTwoDecimals(12.995)).toBe(false);
+  });
+});
+
+describe('clearError', () => {
+  it('removes one field and leaves the rest', () => {
+    const errors = { name: 'x', price: 'y' };
+    expect(clearError(errors, 'name')).toEqual({ price: 'y' });
+    expect(clearError(errors, 'missing')).toBe(errors);
   });
 });
 
