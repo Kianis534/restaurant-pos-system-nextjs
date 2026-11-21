@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Badge, PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { useFeedback } from '@/components/ui/Feedback';
 
 const NO_TABLES: TableType[] = [];
 const NO_AREAS: Area[] = [];
@@ -25,6 +26,7 @@ function TablesPage() {
   const [search, setSearch] = useState('');
   const [newArea, setNewArea] = useState('');
   const [areaError, setAreaError] = useState<string | null>(null);
+  const { toast, confirm } = useFeedback();
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -33,12 +35,18 @@ function TablesPage() {
       .filter((t) => !term || t.name.toLowerCase().includes(term) || t.area.toLowerCase().includes(term));
   }, [tables, search]);
 
-  const removeTable = (table: TableType) => {
+  const removeTable = async (table: TableType) => {
     const open = (held[table.id] ?? []).length > 0;
-    const warning = open ? '\n\nThis table has an unpaid order, which will be discarded.' : '';
-    if (!window.confirm(`Delete table ${table.name}?${warning}`)) return;
+    const ok = await confirm({
+      title: `Delete table ${table.name}?`,
+      description: open ? 'This table has an unpaid order, which will be discarded.' : undefined,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     storage.clearHeldTableOrder(table.id);
-    storage.saveTables(tables.filter((t) => t.id !== table.id));
+    storage.saveTables(storage.getTables().filter((t) => t.id !== table.id));
+    toast(`Deleted table ${table.name}.`);
   };
 
   const addArea = (event: FormEvent) => {
@@ -47,15 +55,22 @@ function TablesPage() {
     setAreaError(problem);
     if (problem) return;
     storage.saveAreas([...areas, { id: uuidv4(), name: newArea.trim() }]);
+    toast(`Added the "${newArea.trim()}" area.`);
     setNewArea('');
   };
 
-  const removeArea = (area: Area) => {
+  const removeArea = async (area: Area) => {
     const count = tables.filter((t) => t.area === area.name).length;
-    const note = count ? ` Its ${count} table(s) will move to "Any area".` : '';
-    if (!window.confirm(`Delete the "${area.name}" area?${note}`)) return;
-    storage.saveTables(tables.map((t) => (t.area === area.name ? { ...t, area: '' } : t)));
-    storage.saveAreas(areas.filter((a) => a.id !== area.id));
+    const ok = await confirm({
+      title: `Delete the "${area.name}" area?`,
+      description: count ? `Its ${count} table${count === 1 ? '' : 's'} will move to "Any area".` : undefined,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    storage.saveTables(storage.getTables().map((t) => (t.area === area.name ? { ...t, area: '' } : t)));
+    storage.saveAreas(storage.getAreas().filter((a) => a.id !== area.id));
+    toast(`Deleted the "${area.name}" area.`);
   };
 
   return (

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { FeedbackProvider } from '@/components/ui/Feedback';
 import { config } from '@/lib/config';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -23,7 +24,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={inter.variable}>
       <body className="font-sans">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <FeedbackProvider>{children}</FeedbackProvider>
+        </AuthProvider>
       </body>
     </html>
   );

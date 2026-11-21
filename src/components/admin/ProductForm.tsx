@@ -10,6 +10,7 @@ import { clearError, validateProduct, type Errors } from '@/lib/validation';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input, Select, Textarea } from '@/components/ui/Input';
+import { useFeedback } from '@/components/ui/Feedback';
 import { Field } from '@/components/ui/Label';
 
 interface ProductFormProps {
@@ -20,6 +21,7 @@ interface ProductFormProps {
 
 export function ProductForm({ product, categories, settings }: ProductFormProps) {
   const router = useRouter();
+  const { toast } = useFeedback();
   const [values, setValues] = useState({
     name: product?.name ?? '',
     category: product?.category ?? categories[0]?.name ?? '',
@@ -65,6 +67,7 @@ export function ProductForm({ product, categories, settings }: ProductFormProps)
       ...(values.description.trim() ? { description: values.description.trim() } : { description: undefined }),
     };
     storage.saveProducts(product ? all.map((p) => (p.id === product.id ? saved : p)) : [...all, saved]);
+    toast(product ? `Saved "${saved.name}".` : `Added "${saved.name}" to the menu.`);
     router.push('/admin/products');
   };
 

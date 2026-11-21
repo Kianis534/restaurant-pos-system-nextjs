@@ -15,6 +15,7 @@ import { PaymentModal } from '@/components/pos/PaymentModal';
 import { ReceiptModal } from '@/components/pos/ReceiptModal';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { useFeedback } from '@/components/ui/Feedback';
 
 const NO_HELD: OrderItem[][] = [];
 
@@ -26,6 +27,7 @@ function TakeawayPage() {
   useEffect(() => {
     storage.saveTakeawayDraft(cart);
   }, [cart]);
+  const { toast, confirm } = useFeedback();
   const held = useStoredData('heldTakeawayOrders', () => storage.getHeldTakeawayOrders(), NO_HELD);
   const [paying, setPaying] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -34,6 +36,7 @@ function TakeawayPage() {
     if (pos.cart.length === 0) return;
     storage.saveHeldTakeawayOrders([...storage.getHeldTakeawayOrders(), pos.cart]);
     pos.clearCart();
+    toast('Order put on hold.', { tone: 'info' });
   };
 
   /** Opening a held order takes it off the hold list; the current cart (if any) goes on hold instead. */
@@ -46,8 +49,9 @@ function TakeawayPage() {
     pos.loadCart(order);
   };
 
-  const clear = () => {
-    if (window.confirm('Remove every item from this order?')) pos.clearCart();
+  const clear = async () => {
+    const ok = await confirm({ title: 'Clear this order?', description: 'Every item is removed. Nothing is charged.', confirmLabel: 'Clear', destructive: true });
+    if (ok) pos.clearCart();
   };
 
   const confirmPayment = (payment: Parameters<typeof pos.checkout>[0]) => {

@@ -1,4 +1,4 @@
-import { addToCart, expect, login, logout, test } from './helpers';
+import { addToCart, answerConfirm, expect, login, logout, test } from './helpers';
 
 test('menu item: validation, create, stock limit at the till, item discount', async ({ page }) => {
   await login(page, 'admin');
@@ -25,6 +25,7 @@ test('menu item: validation, create, stock limit at the till, item discount', as
   await expect(page.getByText('Customers pay $5.50 with tax.')).toBeVisible();
   await page.getByRole('button', { name: 'Add item' }).click();
   await expect(page).toHaveURL(/\/admin\/products\/$/);
+  await expect(page.getByTestId('toast')).toContainText('Added "Tomato Soup" to the menu.');
   await expect(page.getByRole('cell', { name: 'Tomato Soup', exact: true })).toBeVisible();
 
   // Only one in stock: the second tap is refused.
@@ -92,13 +93,9 @@ test('employees: an admin cannot change their own role', async ({ page }) => {
 test('employees: the signed-in admin cannot delete themselves', async ({ page }) => {
   await login(page, 'admin');
   await page.goto('admin/employees/');
-  let message = '';
-  page.once('dialog', (d) => {
-    message = d.message();
-    void d.dismiss();
-  });
   await page.getByRole('button', { name: 'Delete Admin User' }).click();
-  await expect.poll(() => message).toContain("can't delete the account you're signed in with");
+  await expect(page.getByTestId('toast')).toContainText("You can't delete the account you're signed in with.");
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(page.getByRole('row', { name: /Admin User/ })).toBeVisible();
 });
 
@@ -135,6 +132,20 @@ test('reports reflect a sale and the order can be looked up', async ({ page }) =
   await expect(page.getByRole('cell', { name: 'ORD-000001' })).toBeVisible();
 });
 
+test('delete asks first: cancel keeps the item, confirm removes it', async ({ page }) => {
+  await login(page, 'admin');
+  await page.goto('admin/products/');
+  await page.getByRole('button', { name: 'Delete Hot Wings' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('Delete item "Hot Wings"?');
+  await answerConfirm(page, 'Cancel');
+  await expect(page.getByRole('row', { name: /Hot Wings/ })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Delete Hot Wings' }).click();
+  await answerConfirm(page, 'Delete');
+  await expect(page.getByTestId('toast')).toContainText('Deleted "Hot Wings".');
+  await expect(page.getByRole('row', { name: /Hot Wings/ })).toHaveCount(0);
+});
+
 test('reports read a reversed date range the right way round', async ({ page }) => {
   await login(page, 'admin');
   await page.goto('admin/reports/');
@@ -146,7 +157,8 @@ test('reports read a reversed date range the right way round', async ({ page }) 
 test('reset to demo data signs everyone out', async ({ page }) => {
   await login(page, 'admin');
   await page.goto('admin/settings/');
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Reset to demo data' }).click();
+  await answerConfirm(page, 'Reset');
   await expect(page).toHaveURL(/\/login\/$/);
+  await expect(page.getByTestId('toast')).toContainText('Demo data restored.');
 });

@@ -8,10 +8,12 @@ import { clearError, nextTableName, validateTable, type Errors } from '@/lib/val
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
+import { useFeedback } from '@/components/ui/Feedback';
 import { Field } from '@/components/ui/Label';
 
 export function TableForm({ table, areas, tables }: { table?: Table; areas: Area[]; tables: Table[] }) {
   const router = useRouter();
+  const { toast } = useFeedback();
   const [values, setValues] = useState({
     name: table?.name ?? '',
     area: table?.area ?? areas[0]?.name ?? '',
@@ -34,6 +36,7 @@ export function TableForm({ table, areas, tables }: { table?: Table; areas: Area
     if (Object.keys(problems).length) return;
     const saved: Table = { id: table?.id ?? uuidv4(), name, area: values.area, capacity: Number(values.capacity) };
     storage.saveTables(table ? all.map((t) => (t.id === table.id ? saved : t)) : [...all, saved]);
+    toast(table ? `Saved table ${saved.name}.` : `Added table ${saved.name}.`);
     router.push('/admin/tables');
   };
 

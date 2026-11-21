@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Badge, PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { useFeedback } from '@/components/ui/Feedback';
 
 const NO_USERS: User[] = [];
 const ROLE_TONE = { admin: 'blue', cashier: 'green', kitchen: 'amber' } as const;
@@ -21,19 +22,27 @@ function EmployeesPage() {
   const { user: me } = useAuth();
   const users = useStoredData('publicUsers', () => storage.getPublicUsers(), NO_USERS);
   const [search, setSearch] = useState('');
+  const { toast, confirm } = useFeedback();
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
     return users.filter((u) => !term || u.name.toLowerCase().includes(term) || u.employeeNo.toLowerCase().includes(term));
   }, [users, search]);
 
-  const remove = (user: User) => {
-    if (user.id === me?.id) return alert("You can't delete the account you're signed in with.");
+  const remove = async (user: User) => {
+    if (user.id === me?.id) return toast("You can't delete the account you're signed in with.", { tone: 'error' });
     if (user.role === 'admin' && users.filter((u) => u.role === 'admin').length === 1) {
-      return alert("You can't delete the only admin.");
+      return toast("You can't delete the only admin.", { tone: 'error' });
     }
-    if (!window.confirm(`Delete ${user.name} (${user.employeeNo})? They will no longer be able to sign in.`)) return;
+    const ok = await confirm({
+      title: `Delete ${user.name}?`,
+      description: `${user.employeeNo} will no longer be able to sign in. Their past orders stay in the reports.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     storage.saveUsers(storage.getUsers().filter((u) => u.id !== user.id));
+    toast(`Deleted ${user.name}.`);
   };
 
   return (

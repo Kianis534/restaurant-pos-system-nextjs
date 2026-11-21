@@ -5,6 +5,7 @@ import type { Receipt, Settings } from '@/types';
 import { downloadReceiptPdf, receiptRows } from '@/lib/receipt';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { useFeedback } from '@/components/ui/Feedback';
 
 /** Thermal-receipt style view. The `print-area` class makes it the only thing that prints. */
 export function ReceiptView({ receipt, settings }: { receipt: Receipt; settings: Settings }) {
@@ -35,13 +36,14 @@ export function ReceiptView({ receipt, settings }: { receipt: Receipt; settings:
 
 export function ReceiptActions({ receipt, settings, children }: { receipt: Receipt; settings: Settings; children?: React.ReactNode }) {
   const [downloading, setDownloading] = useState(false);
+  const { toast } = useFeedback();
   const download = async () => {
     setDownloading(true);
     try {
       await downloadReceiptPdf(receipt, settings);
     } catch (error) {
       console.error(error);
-      alert('Could not create the PDF. Try printing instead.');
+      toast('Could not create the PDF. Try printing instead.', { tone: 'error' });
     } finally {
       setDownloading(false);
     }

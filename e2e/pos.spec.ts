@@ -1,4 +1,4 @@
-import { addToCart, expect, login, logout, test } from './helpers';
+import { addToCart, answerConfirm, expect, login, logout, test } from './helpers';
 
 test('takeaway order: cash payment, change, receipt and the kitchen ticket', async ({ page }) => {
   await login(page, 'cashier');
@@ -108,8 +108,8 @@ test('an item deleted from the menu must be removed from a held order before pay
   await addToCart(page, 'Cola');
 
   await page.goto('admin/products/');
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Delete Caesar Salad' }).click();
+  await answerConfirm(page, 'Delete');
   await expect(page.getByRole('cell', { name: /Caesar Salad/ })).toHaveCount(0);
 
   await page.goto('cashier/dine-in/');
@@ -126,6 +126,7 @@ test('held takeaway orders can be resumed', async ({ page }) => {
   await page.goto('cashier/takeaway/');
   await addToCart(page, 'Hot Wings');
   await page.getByRole('button', { name: 'Hold order' }).click();
+  await expect(page.getByTestId('toast')).toContainText('Order put on hold.');
   await expect(page.getByRole('button', { name: /On hold #1/ })).toBeVisible();
   await page.getByRole('button', { name: /On hold #1/ }).click();
   await expect(page.getByTestId('cart-total')).toHaveText('$10.45');
