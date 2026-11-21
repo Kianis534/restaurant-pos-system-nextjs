@@ -134,16 +134,21 @@ On a phone the POS stacks into one column and a bar at the bottom keeps the runn
 
 ```
 restaurant-pos-system-nextjs/
-├── .github/workflows/
-│   ├── ci.yml                  # lint, types, unit tests, build, e2e, sub-path build
-│   └── pages.yml               # builds and deploys the demo to GitHub Pages
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml              # lint, types, unit tests, build, e2e, sub-path build
+│   │   └── pages.yml           # builds and deploys the demo to GitHub Pages
+│   ├── ISSUE_TEMPLATE/         # bug report and feature request forms
+│   └── pull_request_template.md
 ├── docs/screenshots/           # README images (npm run screenshots regenerates them)
 ├── e2e/                        # Playwright end-to-end tests
+├── public/icons/               # PNG app icons for the install manifest
 ├── scripts/
 │   ├── capture-screenshots.mjs # drives the app and saves the README screenshots
 │   ├── check-links.mjs         # broken links, anchors and root-absolute paths
 │   ├── check-scripts.mjs       # package.json scripts exist, parse, and match this README
 │   ├── fix-export-segments.mjs # post-build fix for a Next.js export bug on Windows
+│   ├── generate-icons.mjs      # renders the PNG icons from src/app/icon.svg
 │   └── hash-password.mjs       # makes a password hash for the env file
 ├── src/
 │   ├── app/                    # one folder per route (see the page map)
@@ -151,14 +156,15 @@ restaurant-pos-system-nextjs/
 │   │   ├── cashier/            # POS screens and bills
 │   │   ├── kitchen/            # kitchen display
 │   │   ├── login/  unauthorized/  not-found.tsx
-│   │   ├── layout.tsx          # fonts, metadata, AuthProvider
+│   │   ├── layout.tsx          # fonts, metadata, auth and feedback providers
+│   │   ├── icon.svg  apple-icon.png  manifest.ts
 │   │   └── globals.css         # Tailwind, print styles
 │   ├── components/
 │   │   ├── admin/              # forms and the order details panel
 │   │   ├── auth/withAuth.tsx   # role guard for pages
 │   │   ├── layout/             # app shell and role-specific navigation
 │   │   ├── pos/                # menu list, cart, payment, receipt
-│   │   └── ui/                 # buttons, inputs, cards, tables, dialogs
+│   │   └── ui/                 # buttons, inputs, cards, tables, dialogs, toasts
 │   ├── contexts/AuthContext.tsx
 │   ├── hooks/                  # useStoredData (reactive storage reads), usePosCart
 │   ├── lib/                    # all business logic, framework-free and unit tested
@@ -171,10 +177,12 @@ restaurant-pos-system-nextjs/
 │   │   ├── receipt.ts          # receipt layout and PDF
 │   │   ├── validation.ts       # form rules
 │   │   ├── seed.ts             # demo data
-│   │   └── config.ts / format.ts / utils.ts
+│   │   └── config.ts / download.ts / format.ts / utils.ts
 │   └── types/index.ts          # shared data types
 ├── tests/                      # Vitest unit tests
 ├── .env.example                # every setting, documented
+├── .nvmrc  .editorconfig  .gitattributes
+├── CONTRIBUTING.md  SECURITY.md  LICENSE
 ├── next.config.ts              # static export, base path, trailing slashes
 ├── playwright.config.ts
 └── vitest.config.mts
@@ -184,7 +192,7 @@ restaurant-pos-system-nextjs/
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org) 22.12 or newer (the current LTS is fine) and npm
+- [Node.js](https://nodejs.org) 22.12 or newer (the current LTS is fine; `nvm use` reads `.nvmrc`) and npm
 - Git
 
 No database, API keys or accounts are needed.
@@ -488,7 +496,7 @@ What it can't do:
 
 For a multi-till restaurant or anything handling real money, put a server and a database behind the same UI (see the roadmap) so permissions are enforced on the server.
 
-If you find a security problem, please open an issue without exploit details, or contact me through my GitHub profile.
+If you find a security problem, please follow [SECURITY.md](SECURITY.md) rather than posting details in a public issue.
 
 ## Roadmap
 
@@ -504,23 +512,17 @@ If you find a security problem, please open an issue without exploit details, or
 
 ## Contributing
 
-Contributions are welcome.
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, where code belongs, and the checks to run before opening a pull request. Bug reports and ideas are welcome as issues; there are templates for both.
 
-1. Fork the repository and create a branch: `git checkout -b feature/short-description`
-2. Make your change. Keep business logic in `src/lib` with unit tests, and keep pages thin.
-3. Run the checks before opening a pull request:
+The short version:
 
-   ```bash
-   npm run lint && npm run typecheck && npm test
-   ```
+```bash
+npm run lint && npm run typecheck && npm test
+```
 
-   ```bash
-   npm run build && npm run check:site && npm run test:e2e
-   ```
-
-4. Open a pull request that explains what changed and why. Screenshots help for UI changes.
-
-Bug reports and ideas are welcome as issues too.
+```bash
+npm run build && npm run check:site && npm run test:e2e
+```
 
 ## Disclaimer
 
