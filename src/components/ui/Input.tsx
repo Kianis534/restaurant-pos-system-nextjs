@@ -1,21 +1,23 @@
-'use client';
-import React from 'react';
+import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { cn } from '@/lib/utils';
 
-export interface InputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {}
+const fieldClasses =
+  'block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-60 aria-invalid:border-red-500';
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
-    return (
-      <input
-        type={type}
-        className={`flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-        ref={ref}
-        {...props}
-      />
-    );
-  }
-);
+const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
+  <input ref={ref} className={cn(fieldClasses, 'h-10', className)} {...props} />
+));
 Input.displayName = 'Input';
 
-export { Input };
+const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  ({ className, ...props }, ref) => <textarea ref={ref} className={cn(fieldClasses, 'min-h-20', className)} {...props} />,
+);
+Textarea.displayName = 'Textarea';
+
+/** A styled native <select>. Works with forms, `required` and mobile pickers out of the box. */
+const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(({ className, ...props }, ref) => (
+  <select ref={ref} className={cn(fieldClasses, 'h-10 pr-8', className)} {...props} />
+));
+Select.displayName = 'Select';
+
+export { Input, Textarea, Select };

@@ -1,111 +1,100 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Edit, PlusCircle, Search, Trash2 } from 'lucide-react';
+import type { User } from '@/types';
 import withAuth from '@/components/auth/withAuth';
-import { User } from '@/types';
-import { StorageService } from '@/lib/storage';
-import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
+import { storage } from '@/lib/storage';
+import { capitalize } from '@/lib/format';
+import { useStoredData } from '@/hooks/useStoredData';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { Button, LinkButton } from '@/components/ui/Button';
+import { Card, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { PlusCircle, Edit, Trash2, Loader2, Search } from 'lucide-react';
+import { Badge, PageHeader } from '@/components/ui/PageHeader';
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 
-function EmployeeManagement() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const storage = new StorageService();
+const NO_USERS: User[] = [];
+const ROLE_TONE = { admin: 'blue', cashier: 'green', kitchen: 'amber' } as const;
 
-  useEffect(() => {
-    setUsers(storage.getUsers());
-    setIsLoading(false);
-  }, []);
+function EmployeesPage() {
+  const { user: me } = useAuth();
+  const users = useStoredData('publicUsers', () => storage.getPublicUsers(), NO_USERS);
+  const [search, setSearch] = useState('');
 
-  const handleDelete = (userId: string) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      const updatedUsers = users.filter(u => u.id !== userId);
-      storage.saveUsers(updatedUsers);
-      setUsers(updatedUsers);
+  const visible = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return users.filter((u) => !term || u.name.toLowerCase().includes(term) || u.employeeNo.toLowerCase().includes(term));
+  }, [users, search]);
+
+  const remove = (user: User) => {
+    if (user.id === me?.id) return alert("You can't delete the account you're signed in with.");
+    if (user.role === 'admin' && users.filter((u) => u.role === 'admin').length === 1) {
+      return alert("You can't delete the only admin.");
     }
+    if (!window.confirm(`Delete ${user.name} (${user.employeeNo})? They will no longer be able to sign in.`)) return;
+    storage.saveUsers(storage.getUsers().filter((u) => u.id !== user.id));
   };
-
-  const filteredUsers = useMemo(() => {
-    return users.filter(user =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [users, searchQuery]);
-
-  if (isLoading) {
-    return (
-      <AdminLayout>
-        <div className="flex items-center justify-center h-full">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-        </div>
-      </AdminLayout>
-    );
-  }
 
   return (
     <AdminLayout>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Employee Management</h1>
-        <Link href="/admin/employees/new">
-          <Button>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add New Employee
-          </Button>
-        </Link>
+      <PageHeader
+        title="Employees"
+        description="Staff accounts and what they can access."
+        actions={
+          <LinkButton href="/admin/employees/new">
+            <PlusCircle className="h-4 w-4" /> New employee
+          </LinkButton>
+        }
+      />
+      <div className="relative max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+        <Input
+          type="search"
+          className="pl-9"
+          placeholder="Search by name or employee number"
+          aria-label="Search employees"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
-
       <Card>
-        <CardHeader>
-          <CardTitle>Employees</CardTitle>
-          <div className="mt-4">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-              <Input
-                type="search"
-                placeholder="Search employees by name..."
-                className="pl-8 w-full max-w-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-2 sm:pt-2">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-gray-900">Name</TableHead>
-                <TableHead className="text-gray-900">Employee No</TableHead>
-                <TableHead className="text-gray-900">Role</TableHead>
-                <TableHead className="text-gray-900">Email</TableHead>
-                <TableHead className="text-gray-900">Phone</TableHead>
-                <TableHead className="text-right text-gray-900">Actions</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Employee no.</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.map(user => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium text-gray-900">{user.name}</TableCell>
-                  <TableCell className="text-gray-900">{user.employeeNo}</TableCell>
-                  <TableCell className="text-gray-900">{user.role}</TableCell>
-                  <TableCell className="text-gray-900">{user.email}</TableCell>
-                  <TableCell className="text-gray-900">{user.phone}</TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/admin/employees/edit/${user.id}`}>
-                      <Button variant="ghost" size="sm" className="mr-2">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                    <Button variant="destructive" size="sm" onClick={() => handleDelete(user.id)}>
-                      <Trash2 className="h-4 w-4" />
+              {visible.map((u) => (
+                <TableRow key={u.id}>
+                  <TableCell className="font-medium">
+                    {u.name}
+                    {u.id === me?.id && <span className="ml-2 text-xs text-gray-500">(you)</span>}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{u.employeeNo}</TableCell>
+                  <TableCell>
+                    <Badge tone={ROLE_TONE[u.role]}>{capitalize(u.role)}</Badge>
+                  </TableCell>
+                  <TableCell>{u.email || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{u.phone || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right">
+                    <LinkButton href={`/admin/employees/edit?id=${encodeURIComponent(u.id)}`} variant="ghost" size="iconSm" aria-label={`Edit ${u.name}`}>
+                      <Edit className="h-4 w-4" />
+                    </LinkButton>
+                    <Button variant="ghost" size="iconSm" onClick={() => remove(u)} aria-label={`Delete ${u.name}`}>
+                      <Trash2 className="h-4 w-4 text-red-600" />
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
+              {visible.length === 0 && <TableEmpty colSpan={6}>No employees match.</TableEmpty>}
             </TableBody>
           </Table>
         </CardContent>
@@ -114,4 +103,4 @@ function EmployeeManagement() {
   );
 }
 
-export default withAuth(EmployeeManagement, ['admin']);
+export default withAuth(EmployeesPage, ['admin']);

@@ -1,28 +1,30 @@
 'use client';
-import Link from 'next/link';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Lock } from 'lucide-react';
+import { homePathFor, useAuth } from '@/contexts/AuthContext';
+import { Button, LinkButton } from '@/components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 
 export default function UnauthorizedPage() {
+  const { user, logout } = useAuth();
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <main className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
       <Card className="w-full max-w-md text-center">
-        <CardHeader>
-          <Lock className="mx-auto h-12 w-12 text-red-500 mb-4" />
-          <CardTitle className="text-3xl font-bold text-red-600">Access Denied</CardTitle>
+        <CardHeader className="items-center">
+          <Lock className="h-12 w-12 text-red-500" aria-hidden="true" />
+          <CardTitle className="text-2xl text-red-600">Access denied</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-lg text-gray-700">
-            You do not have the necessary permissions to access this page.
-          </p>
-          <Link href="/">
-            <Button>
-              Go to Homepage
-            </Button>
-          </Link>
+          <p className="text-gray-700">Your account doesn&apos;t have permission to open that page.</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <LinkButton href={user ? homePathFor(user.role) : '/login'}>Go to my home screen</LinkButton>
+            {user && (
+              <Button variant="outline" onClick={logout}>
+                Sign in as someone else
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

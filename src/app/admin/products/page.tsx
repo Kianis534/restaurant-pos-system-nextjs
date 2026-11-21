@@ -1,263 +1,223 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
-import withAuth from '@/components/auth/withAuth';
-import { Product, Category } from '@/types';
-import { StorageService } from '@/lib/storage';
-import Link from 'next/link';
-import { AdminLayout } from '@/components/layout/AdminLayout';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { Input } from '@/components/ui/Input';
-import { PlusCircle, Edit, Trash2, Loader2, Search } from 'lucide-react';
+import { useMemo, useState, type FormEvent } from 'react';
+import { Edit, PlusCircle, Search, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import type { Category, Product } from '@/types';
+import withAuth from '@/components/auth/withAuth';
+import { storage } from '@/lib/storage';
+import { formatMoney } from '@/lib/format';
+import { validateName } from '@/lib/validation';
+import { useStoredData } from '@/hooks/useStoredData';
+import { AdminLayout } from '@/components/layout/AdminLayout';
+import { Button, LinkButton } from '@/components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Badge, PageHeader } from '@/components/ui/PageHeader';
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 
-function ProductManagement() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const storage = new StorageService();
+const NO_PRODUCTS: Product[] = [];
+const NO_CATEGORIES: Category[] = [];
 
-  useEffect(() => {
-    setProducts(storage.getProducts());
-    setCategories(storage.getCategories());
-    setIsLoading(false);
-  }, []);
+function MenuPage() {
+  const products = useStoredData('products', () => storage.getProducts(), NO_PRODUCTS);
+  const categories = useStoredData('categories', () => storage.getCategories(), NO_CATEGORIES);
+  const [search, setSearch] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const [categoryError, setCategoryError] = useState<string | null>(null);
 
-  const handleProductDelete = (productId: string) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      const updatedProducts = products.filter(p => p.id !== productId);
-      storage.saveProducts(updatedProducts);
-      setProducts(updatedProducts);
-    }
+  const term = search.trim().toLowerCase();
+  const items = useMemo(
+    () => products.filter((p) => !p.isDeal && (!term || p.name.toLowerCase().includes(term) || (p.sku ?? '').toLowerCase().includes(term))),
+    [products, term],
+  );
+  const deals = useMemo(() => products.filter((p) => p.isDeal && (!term || p.name.toLowerCase().includes(term))), [products, term]);
+  const nameOf = (id: string) => products.find((p) => p.id === id)?.name;
+
+  const deleteProduct = (product: Product) => {
+    const usedIn = products.filter((p) => p.isDeal && p.dealItems?.includes(product.id));
+    const warning = usedIn.length ? `\n\nIt will also be taken out of: ${usedIn.map((d) => d.name).join(', ')}.` : '';
+    if (!window.confirm(`Delete "${product.name}"?${warning}`)) return;
+    const settings = storage.getSettings();
+    storage.saveProducts(
+      products
+        .filter((p) => p.id !== product.id)
+        .map((p) => (p.isDeal && p.dealItems?.includes(product.id) ? { ...p, dealItems: p.dealItems.filter((id) => id !== product.id) } : p)),
+    );
+    storage.saveSettings({ ...settings, taxExemptProductIds: settings.taxExemptProductIds.filter((id) => id !== product.id) });
+    storage.saveDiscounts(storage.getDiscounts().filter((d) => !(d.type === 'item' && d.target === product.id)));
   };
 
-  const handleAddCategory = () => {
-    if (newCategoryName.trim() === '') {
-      alert('Category name cannot be empty.');
-      return;
-    }
-    const newCategory: Category = {
-      id: uuidv4(),
-      name: newCategoryName.trim(),
-    };
-    const updatedCategories = [...categories, newCategory];
-    storage.saveCategories(updatedCategories);
-    setCategories(updatedCategories);
-    setNewCategoryName('');
+  const addCategory = (event: FormEvent) => {
+    event.preventDefault();
+    const problem = validateName(newCategory, categories, 'Category');
+    setCategoryError(problem);
+    if (problem) return;
+    storage.saveCategories([...categories, { id: uuidv4(), name: newCategory.trim() }]);
+    setNewCategory('');
   };
 
-  const handleCategoryDelete = (categoryId: string) => {
-    if (window.confirm('Are you sure you want to delete this category? This will also remove the category from all products.')) {
-      const categoryToDelete = categories.find(c => c.id === categoryId);
-      if (!categoryToDelete) return;
-
-      const updatedProducts = products.map(product => {
-        if (product.category === categoryToDelete.name) {
-          return { ...product, category: '' };
-        }
-        return product;
-      });
-      storage.saveProducts(updatedProducts);
-      setProducts(updatedProducts);
-
-      const updatedCategories = categories.filter(c => c.id !== categoryId);
-      storage.saveCategories(updatedCategories);
-      setCategories(updatedCategories);
-    }
+  const deleteCategory = (category: Category) => {
+    const count = products.filter((p) => p.category === category.name).length;
+    const note = count ? ` ${count} item(s) will become uncategorised.` : '';
+    if (!window.confirm(`Delete the "${category.name}" category?${note}`)) return;
+    storage.saveProducts(products.map((p) => (p.category === category.name ? { ...p, category: '' } : p)));
+    storage.saveCategories(categories.filter((c) => c.id !== category.id));
+    storage.saveDiscounts(storage.getDiscounts().filter((d) => !(d.type === 'category' && d.target === category.name)));
   };
-
-  const filteredItems = useMemo(() => {
-    return products.filter(product =>
-      !product.isDeal && product.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [products, searchQuery]);
-
-  const filteredDeals = useMemo(() => {
-    return products.filter(product =>
-      product.isDeal && product.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [products, searchQuery]);
-
-  if (isLoading) {
-    return (
-      <AdminLayout>
-        <div className="flex items-center justify-center h-full">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-        </div>
-      </AdminLayout>
-    );
-  }
 
   return (
     <AdminLayout>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Product Management</h1>
-        <div className="space-x-4">
-          <Link href="/admin/products/new">
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add New Product
-            </Button>
-          </Link>
-          <Link href="/admin/products/new-deal">
-            <Button variant="secondary">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add New Deal
-            </Button>
-          </Link>
-        </div>
-      </div>
-      
-      <div className="relative w-full max-w-sm mb-6">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+      <PageHeader
+        title="Menu"
+        description="Items, deals and categories."
+        actions={
+          <>
+            <LinkButton href="/admin/products/new">
+              <PlusCircle className="h-4 w-4" /> New item
+            </LinkButton>
+            <LinkButton href="/admin/products/deals/new" variant="outline">
+              <PlusCircle className="h-4 w-4" /> New deal
+            </LinkButton>
+          </>
+        }
+      />
+
+      <div className="relative max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
         <Input
           type="search"
-          placeholder="Search products by name..."
-          className="pl-8 w-full"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+          placeholder="Search by name or SKU"
+          aria-label="Search the menu"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
-      <div className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Items</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-gray-900">Name</TableHead>
-                  <TableHead className="text-gray-900">Category</TableHead>
-                  <TableHead className="text-gray-900">Price</TableHead>
-                  <TableHead className="text-gray-900">Cost</TableHead>
-                  <TableHead className="text-gray-900">Quantity</TableHead>
-                  <TableHead className="text-right text-gray-900">Actions</TableHead>
+      <Card>
+        <CardHeader>
+          <CardTitle>Items</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Price</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead className="text-right">Stock</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell>
+                    <span className="font-medium">{p.name}</span>
+                    {p.sku && <span className="block text-xs text-gray-500">{p.sku}</span>}
+                  </TableCell>
+                  <TableCell>{p.category || <span className="text-gray-400">None</span>}</TableCell>
+                  <TableCell className="text-right">{formatMoney(p.price)}</TableCell>
+                  <TableCell className="text-right">{formatMoney(p.cost)}</TableCell>
+                  <TableCell className="text-right">
+                    {p.quantity <= 0 ? <Badge tone="red">Out</Badge> : p.quantity <= 10 ? <Badge tone="amber">{p.quantity}</Badge> : p.quantity}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-right">
+                    <LinkButton href={`/admin/products/edit?id=${encodeURIComponent(p.id)}`} variant="ghost" size="iconSm" aria-label={`Edit ${p.name}`}>
+                      <Edit className="h-4 w-4" />
+                    </LinkButton>
+                    <Button variant="ghost" size="iconSm" onClick={() => deleteProduct(p)} aria-label={`Delete ${p.name}`}>
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredItems.map(product => {
-                  return (
-                    <TableRow key={product.id}>
-                      <TableCell className="font-medium text-gray-900">{product.name}</TableCell>
-                      <TableCell className="text-gray-900">{product.category}</TableCell>
-                      <TableCell className="text-gray-900">
-                        ${product.price.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-gray-900">${product.cost.toFixed(2)}</TableCell>
-                      <TableCell className="text-gray-900">{product.quantity}</TableCell>
-                      <TableCell className="text-right">
-                        <Link href={`/admin/products/edit/${product.id}`}>
-                          <Button variant="ghost" size="sm" className="mr-2">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                        <Button variant="destructive" size="sm" onClick={() => handleProductDelete(product.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+              ))}
+              {items.length === 0 && <TableEmpty colSpan={6}>{term ? 'No items match.' : 'No items yet.'}</TableEmpty>}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Deals</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-gray-900">Name</TableHead>
-                  <TableHead className="text-gray-900">Price</TableHead>
-                  <TableHead className="text-right text-gray-900">Actions</TableHead>
+      <Card>
+        <CardHeader>
+          <CardTitle>Deals</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Includes</TableHead>
+                <TableHead className="text-right">Price</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {deals.map((d) => (
+                <TableRow key={d.id}>
+                  <TableCell className="font-medium">{d.name}</TableCell>
+                  <TableCell className="text-gray-600">{(d.dealItems ?? []).map(nameOf).filter(Boolean).join(', ') || '-'}</TableCell>
+                  <TableCell className="text-right">{formatMoney(d.price)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right">
+                    <LinkButton href={`/admin/products/deals/edit?id=${encodeURIComponent(d.id)}`} variant="ghost" size="iconSm" aria-label={`Edit ${d.name}`}>
+                      <Edit className="h-4 w-4" />
+                    </LinkButton>
+                    <Button variant="ghost" size="iconSm" onClick={() => deleteProduct(d)} aria-label={`Delete ${d.name}`}>
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDeals.map(deal => (
-                  <TableRow key={deal.id}>
-                    <TableCell className="font-medium text-gray-900">{deal.name}</TableCell>
-                    <TableCell className="text-gray-900">${deal.price.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">
-                      <Link href={`/admin/products/edit-deal/${deal.id}`}>
-                        <Button variant="ghost" size="sm" className="mr-2">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      <Button variant="destructive" size="sm" onClick={() => handleProductDelete(deal.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+              ))}
+              {deals.length === 0 && <TableEmpty colSpan={4}>{term ? 'No deals match.' : 'No deals yet.'}</TableEmpty>}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-      <div className="mt-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Category Management</h2>
-        <div className="flex flex-col gap-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Add New Category</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center space-x-2">
-                <Input
-                  type="text"
-                  placeholder="Enter category name"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  className="w-full"
-                />
-                <Button onClick={handleAddCategory}>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Existing Categories</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-gray-900">Name</TableHead>
-                    <TableHead className="text-right text-gray-900">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {categories.map(category => (
-                    <TableRow key={category.id}>
-                      <TableCell className="font-medium text-gray-900">{category.name}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="destructive" size="sm" onClick={() => handleCategoryDelete(category.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Categories</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={addCategory} className="flex max-w-md gap-2" noValidate>
+            <Input
+              placeholder="New category name"
+              aria-label="New category name"
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              aria-invalid={!!categoryError}
+            />
+            <Button type="submit">
+              <PlusCircle className="h-4 w-4" /> Add
+            </Button>
+          </form>
+          {categoryError && (
+            <p className="text-sm text-red-600" role="alert">
+              {categoryError}
+            </p>
+          )}
+          <ul className="flex flex-wrap gap-2">
+            {categories.map((c) => (
+              <li key={c.id} className="flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 py-1 pl-3 pr-1 text-sm">
+                {c.name}
+                <span className="text-xs text-gray-500">({products.filter((p) => p.category === c.name).length})</span>
+                <button
+                  type="button"
+                  onClick={() => deleteCategory(c)}
+                  className="rounded-full p-1 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                  aria-label={`Delete category ${c.name}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+            {categories.length === 0 && <li className="text-sm text-gray-500">No categories yet.</li>}
+          </ul>
+        </CardContent>
+      </Card>
     </AdminLayout>
   );
 }
 
-export default withAuth(ProductManagement, ['admin']);
+export default withAuth(MenuPage, ['admin']);

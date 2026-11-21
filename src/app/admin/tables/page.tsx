@@ -1,210 +1,158 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
-import withAuth from '@/components/auth/withAuth';
-import { Table as TableType, Area } from '@/types';
-import { StorageService } from '@/lib/storage';
-import Link from 'next/link';
-import { AdminLayout } from '@/components/layout/AdminLayout';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { Input } from '@/components/ui/Input';
-import { PlusCircle, Edit, Trash2, Loader2, Search } from 'lucide-react';
+import { useMemo, useState, type FormEvent } from 'react';
+import { Edit, PlusCircle, Search, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import type { Area, OrderItem, Table as TableType } from '@/types';
+import withAuth from '@/components/auth/withAuth';
+import { storage } from '@/lib/storage';
+import { validateName } from '@/lib/validation';
+import { useStoredData } from '@/hooks/useStoredData';
+import { AdminLayout } from '@/components/layout/AdminLayout';
+import { Button, LinkButton } from '@/components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Badge, PageHeader } from '@/components/ui/PageHeader';
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 
-function TableManagement() {
-  const [tables, setTables] = useState<TableType[]>([]);
-  const [areas, setAreas] = useState<Area[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [newAreaName, setNewAreaName] = useState('');
-  const storage = new StorageService();
+const NO_TABLES: TableType[] = [];
+const NO_AREAS: Area[] = [];
+const NO_HELD: Record<string, OrderItem[]> = {};
 
-  useEffect(() => {
-    setTables(storage.getTables());
-    setAreas(storage.getAreas());
-    setIsLoading(false);
-  }, []);
+function TablesPage() {
+  const tables = useStoredData('tables', () => storage.getTables(), NO_TABLES);
+  const areas = useStoredData('areas', () => storage.getAreas(), NO_AREAS);
+  const held = useStoredData('heldTableOrders', () => storage.getHeldTableOrders(), NO_HELD);
+  const [search, setSearch] = useState('');
+  const [newArea, setNewArea] = useState('');
+  const [areaError, setAreaError] = useState<string | null>(null);
 
-  const handleTableDelete = (tableId: string) => {
-    if (window.confirm('Are you sure you want to delete this table?')) {
-      const updatedTables = tables.filter(t => t.id !== tableId);
-      storage.saveTables(updatedTables);
-      setTables(updatedTables);
-    }
+  const visible = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return [...tables]
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+      .filter((t) => !term || t.name.toLowerCase().includes(term) || t.area.toLowerCase().includes(term));
+  }, [tables, search]);
+
+  const removeTable = (table: TableType) => {
+    const open = (held[table.id] ?? []).length > 0;
+    const warning = open ? '\n\nThis table has an unpaid order, which will be discarded.' : '';
+    if (!window.confirm(`Delete table ${table.name}?${warning}`)) return;
+    storage.clearHeldTableOrder(table.id);
+    storage.saveTables(tables.filter((t) => t.id !== table.id));
   };
 
-  const handleAddArea = () => {
-    if (newAreaName.trim() === '') {
-      alert('Area name cannot be empty.');
-      return;
-    }
-    const newArea: Area = {
-      id: uuidv4(),
-      name: newAreaName.trim(),
-    };
-    const updatedAreas = [...areas, newArea];
-    storage.saveAreas(updatedAreas);
-    setAreas(updatedAreas);
-    setNewAreaName('');
+  const addArea = (event: FormEvent) => {
+    event.preventDefault();
+    const problem = validateName(newArea, areas, 'Area');
+    setAreaError(problem);
+    if (problem) return;
+    storage.saveAreas([...areas, { id: uuidv4(), name: newArea.trim() }]);
+    setNewArea('');
   };
 
-  const handleAreaDelete = (areaId: string) => {
-    if (window.confirm('Are you sure you want to delete this area?')) {
-      const areaToDelete = areas.find(a => a.id === areaId);
-      if (!areaToDelete) return;
-
-      const updatedTables = tables.map(table => {
-        if (table.area === areaToDelete.name) {
-          return { ...table, area: '' };
-        }
-        return table;
-      });
-      storage.saveTables(updatedTables);
-      setTables(updatedTables);
-
-      const updatedAreas = areas.filter(a => a.id !== areaId);
-      storage.saveAreas(updatedAreas);
-      setAreas(updatedAreas);
-    }
+  const removeArea = (area: Area) => {
+    const count = tables.filter((t) => t.area === area.name).length;
+    const note = count ? ` Its ${count} table(s) will move to "Any area".` : '';
+    if (!window.confirm(`Delete the "${area.name}" area?${note}`)) return;
+    storage.saveTables(tables.map((t) => (t.area === area.name ? { ...t, area: '' } : t)));
+    storage.saveAreas(areas.filter((a) => a.id !== area.id));
   };
-
-  const filteredTables = useMemo(() => {
-    return tables.filter(table =>
-      table && table.name && table.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [tables, searchQuery]);
-
-  if (isLoading) {
-    return (
-      <AdminLayout>
-        <div className="flex items-center justify-center h-full">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-        </div>
-      </AdminLayout>
-    );
-  }
 
   return (
     <AdminLayout>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Table Management</h1>
-        <div className="space-x-4">
-          <Link href="/admin/tables/new">
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add New Table
-            </Button>
-          </Link>
-        </div>
-      </div>
-      
-      <div className="relative w-full max-w-sm mb-6">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+      <PageHeader
+        title="Tables"
+        description="Your floor plan: tables and the areas they belong to."
+        actions={
+          <LinkButton href="/admin/tables/new">
+            <PlusCircle className="h-4 w-4" /> New table
+          </LinkButton>
+        }
+      />
+      <div className="relative max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
         <Input
           type="search"
-          placeholder="Search tables by name..."
-          className="pl-8 w-full"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+          placeholder="Search by table or area"
+          aria-label="Search tables"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
-      <div className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Tables</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-gray-900">Name</TableHead>
-                  <TableHead className="text-gray-900">Area</TableHead>
-                  <TableHead className="text-gray-900">Capacity</TableHead>
-                  <TableHead className="text-right text-gray-900">Actions</TableHead>
+      <Card>
+        <CardContent className="pt-2 sm:pt-2">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Table</TableHead>
+                <TableHead>Area</TableHead>
+                <TableHead className="text-right">Seats</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visible.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell className="font-medium">{t.name}</TableCell>
+                  <TableCell>{t.area || <span className="text-gray-500">Any area</span>}</TableCell>
+                  <TableCell className="text-right">{t.capacity}</TableCell>
+                  <TableCell>{(held[t.id] ?? []).length > 0 ? <Badge tone="amber">Open order</Badge> : <Badge tone="green">Free</Badge>}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right">
+                    <LinkButton href={`/admin/tables/edit?id=${encodeURIComponent(t.id)}`} variant="ghost" size="iconSm" aria-label={`Edit ${t.name}`}>
+                      <Edit className="h-4 w-4" />
+                    </LinkButton>
+                    <Button variant="ghost" size="iconSm" onClick={() => removeTable(t)} aria-label={`Delete ${t.name}`}>
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTables.map(table => {
-                  return (
-                    <TableRow key={table.id}>
-                      <TableCell className="font-medium text-gray-900">{table.name}</TableCell>
-                      <TableCell className="text-gray-900">{table.area || 'Universal'}</TableCell>
-                      <TableCell className="text-gray-900">{table.capacity}</TableCell>
-                      <TableCell className="text-right">
-                        <Link href={`/admin/tables/edit/${table.id}`}>
-                          <Button variant="ghost" size="sm" className="mr-2">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                        <Button variant="destructive" size="sm" onClick={() => handleTableDelete(table.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+              ))}
+              {visible.length === 0 && <TableEmpty colSpan={5}>No tables match.</TableEmpty>}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-      <div className="mt-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Area Management</h2>
-        <div className="flex flex-col gap-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Add New Area</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center space-x-2">
-                <Input
-                  type="text"
-                  placeholder="Enter area name"
-                  value={newAreaName}
-                  onChange={(e) => setNewAreaName(e.target.value)}
-                  className="w-full"
-                />
-                <Button onClick={handleAddArea}>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Existing Areas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-gray-900">Name</TableHead>
-                    <TableHead className="text-right text-gray-900">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {areas.map(area => (
-                    <TableRow key={area.id}>
-                      <TableCell className="font-medium text-gray-900">{area.name}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="destructive" size="sm" onClick={() => handleAreaDelete(area.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Areas</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={addArea} className="flex max-w-md gap-2" noValidate>
+            <Input placeholder="New area name" aria-label="New area name" value={newArea} onChange={(e) => setNewArea(e.target.value)} aria-invalid={!!areaError} />
+            <Button type="submit">
+              <PlusCircle className="h-4 w-4" /> Add
+            </Button>
+          </form>
+          {areaError && (
+            <p className="text-sm text-red-600" role="alert">
+              {areaError}
+            </p>
+          )}
+          <ul className="flex flex-wrap gap-2">
+            {areas.map((a) => (
+              <li key={a.id} className="flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 py-1 pl-3 pr-1 text-sm">
+                {a.name}
+                <span className="text-xs text-gray-500">({tables.filter((t) => t.area === a.name).length})</span>
+                <button
+                  type="button"
+                  onClick={() => removeArea(a)}
+                  className="rounded-full p-1 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                  aria-label={`Delete area ${a.name}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+            {areas.length === 0 && <li className="text-sm text-gray-500">No areas yet.</li>}
+          </ul>
+        </CardContent>
+      </Card>
     </AdminLayout>
   );
 }
 
-export default withAuth(TableManagement, ['admin']);
+export default withAuth(TablesPage, ['admin']);

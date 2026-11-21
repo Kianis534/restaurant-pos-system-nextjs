@@ -1,318 +1,173 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { useEffect, useMemo, useState } from 'react';
+import type { Area, OrderItem, Receipt, Table } from '@/types';
+import withAuth from '@/components/auth/withAuth';
 import { useAuth } from '@/contexts/AuthContext';
-import { Table, Product, OrderItem, Order, Sale, Area, Receipt } from '@/types';
-import { StorageService } from '@/lib/storage';
-import ProductList from '@/components/cashier/ProductList';
+import { storage } from '@/lib/storage';
+import { cartTotals } from '@/lib/pricing';
+import { formatMoney } from '@/lib/format';
+import { cn } from '@/lib/utils';
+import { usePosCart } from '@/hooks/usePosCart';
+import { useStoredData } from '@/hooks/useStoredData';
 import { CashierLayout } from '@/components/layout/CashierLayout';
+import ProductList from '@/components/pos/ProductList';
+import { CartPanel, MobileCartBar } from '@/components/pos/CartPanel';
+import { PaymentModal } from '@/components/pos/PaymentModal';
+import { ReceiptModal } from '@/components/pos/ReceiptModal';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Loader2 } from 'lucide-react';
-import { Modal } from '@/components/ui/Modal';
-import { Label } from '@/components/ui/Label';
-import ReceiptComponent from '@/components/cashier/Receipt';
 
-export default function TablePos() {
+const NO_TABLES: Table[] = [];
+const NO_AREAS: Area[] = [];
+const NO_HELD: Record<string, OrderItem[]> = {};
+
+function DineInPage() {
   const { user } = useAuth();
-  const router = useRouter();
-  const storage = new StorageService();
-  
-  const [tables, setTables] = useState<Table[]>([]);
-  const [areas, setAreas] = useState<Area[]>([]);
-  const [selectedAreaName, setSelectedAreaName] = useState<string>('all');
-  const [products, setProducts] = useState<Product[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [globalTaxRate, setGlobalTaxRate] = useState(0);
-  const [selectedTable, setSelectedTable] = useState<Table | null>(null);
-  const [cart, setCart] = useState<OrderItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'hybrid'>('cash');
-  const [cashAmountInput, setCashAmountInput] = useState(0);
-  const [cardAmountInput, setCardAmountInput] = useState(0);
+  const pos = usePosCart();
+  const tables = useStoredData('tables', () => storage.getTables(), NO_TABLES);
+  const areas = useStoredData('areas', () => storage.getAreas(), NO_AREAS);
+  const held = useStoredData('heldTableOrders', () => storage.getHeldTableOrders(), NO_HELD);
+
+  const [areaFilter, setAreaFilter] = useState('all');
+  const [tableId, setTableId] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
-  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const table = tables.find((t) => t.id === tableId) ?? null;
 
+  // A table's order is its running tab: every change is saved straight away, so nothing is
+  // lost when the cashier switches tables, reloads or walks away.
+  const { cart } = pos;
   useEffect(() => {
-    setTables(storage.getTables());
-    setAreas(storage.getAreas());
-    setProducts(storage.getProducts());
-    setSales(storage.getSales());
-    const settings = storage.getSettings();
-    setGlobalTaxRate(settings.taxRate);
-    setIsLoading(false);
-  }, [storage]);
+    if (tableId) storage.saveHeldTableOrder(tableId, cart);
+  }, [tableId, cart]);
 
-  const handleTableSelect = (table: Table) => {
-    if (selectedTable && cart.length > 0 && selectedTable.id !== table.id) {
-      storage.saveHeldOrder(selectedTable.id, cart);
-    }
-    setSelectedTable(table);
-    const heldOrder = storage.getHeldOrder(table.id);
-    setCart(heldOrder || []);
+  const visibleTables = useMemo(
+    () => (areaFilter === 'all' ? tables : tables.filter((t) => t.area === areaFilter || t.area === '')),
+    [tables, areaFilter],
+  );
+
+  const selectTable = (next: Table) => {
+    if (next.id === tableId) return;
+    setTableId(next.id);
+    pos.loadCart(storage.getHeldTableOrder(next.id));
   };
 
-  const holdOrder = () => {
-    if (selectedTable && cart.length > 0) {
-      storage.saveHeldOrder(selectedTable.id, cart);
-      setCart([]);
-      setSelectedTable(null);
-    }
+  const closeTable = () => {
+    setTableId(null);
+    pos.clearCart();
   };
 
-  const clearOrder = () => {
-    if (selectedTable) {
-      storage.clearHeldOrder(selectedTable.id);
-    }
-    setCart([]);
+  const clearTable = () => {
+    if (!tableId || !window.confirm('Remove every item from this table?')) return;
+    pos.clearCart();
   };
 
-  const getItemTotalPrice = (product: Product, quantity: number) => {
-    const basePrice = product.price;
-    const taxRateToApply = globalTaxRate;
-    const priceWithTax = basePrice * (1 + taxRateToApply);
-    const taxAmount = basePrice * taxRateToApply;
-    const total = priceWithTax * quantity;
-    return { price: basePrice, tax: taxAmount, total: total };
+  const confirmPayment = (payment: Parameters<typeof pos.checkout>[0]) => {
+    if (!user || !table) return 'Select a table first.';
+    const result = pos.checkout(payment, { type: 'dine-in', table: { id: table.id, name: table.name }, employee: user });
+    if (!result.ok) return result.error;
+    storage.clearHeldTableOrder(table.id);
+    setTableId(null);
+    setPaying(false);
+    setReceipt(result.receipt);
+    return null;
   };
-
-  const addToCart = (product: Product) => {
-    const existingItem = cart.find(item => item.productId === product.id);
-    if (existingItem) {
-      const { price, tax, total } = getItemTotalPrice(product, existingItem.quantity + 1);
-      setCart(cart.map(item => 
-        item.productId === product.id ? { ...item, quantity: item.quantity + 1, price, tax, total } : item
-      ));
-    } else {
-      const { price, tax, total } = getItemTotalPrice(product, 1);
-      const newItem: OrderItem = { id: Date.now().toString(), productId: product.id, productName: product.name, quantity: 1, price, tax, total };
-      setCart([...cart, newItem]);
-    }
-  };
-
-  const removeFromCart = (itemId: string) => {
-    setCart(cart.filter(item => item.id !== itemId));
-  };
-
-  const updateQuantity = (itemId: string, quantity: number) => {
-    if (quantity < 1) {
-      removeFromCart(itemId);
-      return;
-    }
-    const itemToUpdate = cart.find(item => item.id === itemId);
-    if(itemToUpdate) {
-      const product = products.find(p => p.id === itemToUpdate.productId);
-      if(product) {
-        const { price, tax, total } = getItemTotalPrice(product, quantity);
-        setCart(cart.map(item => 
-          item.id === itemId ? { ...item, quantity, price, tax, total } : item
-        ));
-      }
-    }
-  };
-
-  const getCartTotal = () => {
-    return cart.reduce((total, item) => total + item.total, 0);
-  };
-
-  const handleConfirmPayment = () => {
-    const totalBill = getCartTotal();
-    if (!selectedTable) {
-      alert('No table selected.');
-      return;
-    }
-
-    if (paymentMethod === 'hybrid') {
-      const totalHybridAmount = cashAmountInput + cardAmountInput;
-      if (isNaN(cashAmountInput) || isNaN(cardAmountInput) || cashAmountInput < 0 || cardAmountInput < 0) {
-        alert('Please enter valid numbers for cash and card amounts.');
-        return;
-      }
-      if (Math.abs(totalHybridAmount - totalBill) > 0.01) {
-        alert(`Total hybrid amount (${totalHybridAmount.toFixed(2)}) must equal total bill (${totalBill.toFixed(2)}).`);
-        return;
-      }
-    }
-
-    const newOrder: Order = {
-      id: Date.now().toString(),
-      orderNumber: `ORD-${Date.now()}`,
-      type: 'table',
-      tableId: selectedTable.id,
-      items: cart,
-      status: 'completed',
-      subtotal: cart.reduce((acc, item) => acc + item.price * item.quantity, 0),
-      tax: cart.reduce((acc, item) => acc + item.tax * item.quantity, 0),
-      total: totalBill,
-      createdAt: new Date().toISOString(),
-      employeeId: user!.id,
-      employeeName: user!.name,
-      paymentMethod,
-      cashAmount: paymentMethod === 'hybrid' || paymentMethod === 'cash' ? cashAmountInput : undefined,
-      cardAmount: paymentMethod === 'hybrid' || paymentMethod === 'card' ? cardAmountInput : undefined,
-    };
-    
-    const orders = storage.getOrders();
-    storage.saveOrders([...orders, newOrder]);
-    
-    const newReceipt: Receipt = {
-      id: `REC-${Date.now()}`,
-      orderId: newOrder.id,
-      date: newOrder.createdAt,
-      items: newOrder.items,
-      subtotal: newOrder.subtotal,
-      tax: newOrder.tax,
-      total: newOrder.total,
-      employeeName: newOrder.employeeName,
-    };
-    storage.saveReceipt(newReceipt);
-    setReceipt(newReceipt);
-    setIsReceiptModalOpen(true);
-    setIsPaymentModalOpen(false);
-  };
-
-  const handleCloseReceiptModal = () => {
-    let updatedProducts = [...products];
-    cart.forEach(item => {
-      const product = updatedProducts.find(p => p.id === item.productId);
-      if (product) {
-        product.quantity -= item.quantity;
-      }
-    });
-    setProducts(updatedProducts);
-    storage.saveProducts(updatedProducts);
-
-    clearOrder();
-    setSelectedTable(null);
-    setIsReceiptModalOpen(false);
-    setPaymentMethod('cash');
-    setCashAmountInput(0);
-    setCardAmountInput(0);
-    setReceipt(null);
-  };
-  
-  const handlePrintReceipt = () => window.print();
-
-  const handleDownloadReceipt = () => {
-    const input = document.getElementById('receipt-content');
-    if (input) {
-      html2canvas(input).then((canvas) => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', [79.5, 200]);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`receipt-${receipt?.id}.pdf`);
-      });
-    }
-  };
-
-  const filteredTablesByArea = useMemo(() => {
-    if (selectedAreaName === 'all') return tables;
-    return tables.filter(table => table.area === selectedAreaName || !table.area);
-  }, [tables, selectedAreaName]);
-
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-100"><Loader2 className="h-12 w-12 animate-spin text-blue-600" /></div>;
-  }
 
   return (
     <CashierLayout>
-      <div className="flex flex-col md:flex-row h-full gap-6">
-        <Card className="md:w-1/3">
-          <CardHeader><CardTitle>Restaurant Tables</CardTitle></CardHeader>
+      <div className="grid gap-6 pb-20 lg:grid-cols-3 lg:pb-0">
+        <Card>
+          <CardHeader className="gap-3 pb-3">
+            <CardTitle>Tables</CardTitle>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by area">
+              {[{ id: 'all', name: 'all' }, ...areas].map((area) => (
+                <Button
+                  key={area.id}
+                  size="sm"
+                  variant={areaFilter === area.name ? 'default' : 'outline'}
+                  onClick={() => setAreaFilter(area.name)}
+                  aria-pressed={areaFilter === area.name}
+                >
+                  {area.name === 'all' ? 'All areas' : area.name}
+                </Button>
+              ))}
+            </div>
+          </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2 mb-4">
-              <Button onClick={() => setSelectedAreaName('all')} variant={selectedAreaName === 'all' ? 'default' : 'outline'} size="sm">All Areas</Button>
-              {areas.map(area => (<Button key={area.id} onClick={() => setSelectedAreaName(area.name)} variant={selectedAreaName === area.name ? 'default' : 'outline'} size="sm">{area.name}</Button>))}
-              {!areas.length && <p className="text-sm text-gray-500">No areas defined.</p>}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {filteredTablesByArea.map(table => (<Button key={table.id} onClick={() => handleTableSelect(table)} variant={selectedTable?.id === table.id ? 'default' : 'outline'} className="flex flex-col h-auto py-4">
-                  <span className="font-semibold text-lg text-gray-900">{table.name}</span>
-                  <span className="text-sm text-gray-800">{table.area}</span>
-                  <span className="text-xs text-gray-500">Seats: {table.capacity}</span>
-                </Button>))}
-            </div>
+            {visibleTables.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-500">No tables yet. An admin can add them under Tables.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2">
+                {visibleTables.map((t) => {
+                  const tab = held[t.id] ?? [];
+                  const open = tab.length > 0;
+                  const selected = t.id === tableId;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => selectTable(t)}
+                      aria-pressed={selected}
+                      className={cn(
+                        'flex flex-col items-start rounded-lg border p-3 text-left transition',
+                        selected
+                          ? 'border-blue-600 bg-blue-600 text-white'
+                          : open
+                            ? 'border-amber-300 bg-amber-50 text-gray-900 hover:border-amber-400'
+                            : 'border-gray-200 bg-white text-gray-900 hover:border-blue-300',
+                      )}
+                    >
+                      <span className="text-lg font-semibold">{t.name}</span>
+                      <span className={cn('text-xs', selected ? 'text-blue-100' : 'text-gray-500')}>
+                        {t.area || 'Any area'} · {t.capacity} seats
+                      </span>
+                      <span className={cn('mt-1 text-xs font-medium', selected ? 'text-white' : open ? 'text-amber-700' : 'text-green-700')}>
+                        {open ? `Open · ${formatMoney(cartTotals(tab).total)}` : 'Free'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <div className="md:w-1/3"><ProductList products={products} onAddToCart={addToCart} getItemTotalPrice={getItemTotalPrice} disabled={!selectedTable} /></div>
+        <ProductList
+          products={pos.products}
+          ctx={pos.ctx}
+          available={pos.available}
+          onAdd={pos.addProduct}
+          disabled={!table}
+          disabledMessage="Pick a table to start an order."
+        />
 
-        <Card className="md:w-1/3 flex flex-col">
-          <CardHeader><CardTitle className="text-gray-900">Order {selectedTable ? `- Table ${selectedTable.name}` : ''}</CardTitle></CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-between">
-            {!selectedTable ? (<div className="text-center py-8 text-gray-500">Please select a table</div>) 
-            : cart.length === 0 ? (<div className="text-center py-8 text-gray-500">Cart is empty.</div>) 
-            : (<>
-                <div className="space-y-3 max-h-64 overflow-y-auto">{cart.map(item => (<div key={item.id} className="flex items-center justify-between p-2 border rounded">
-                      <div className="flex-1">
-                        <div className="font-medium">{item.productName}</div>
-                        <div className="text-sm text-gray-600">${item.price.toFixed(2)} each</div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity - 1)}>-</Button>
-                        <span className="w-8 text-center">{item.quantity}</span>
-                        <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</Button>
-                        <span className="w-16 text-right font-semibold">${item.total.toFixed(2)}</span>
-                        <Button variant="ghost" size="icon" onClick={() => removeFromCart(item.id)}>×</Button>
-                      </div>
-                    </div>))}</div>
-                <div className="mt-6 pt-4 border-t">
-                  <div className="flex justify-between items-center text-lg font-semibold mb-4">
-                    <span className="text-gray-900">Total:</span><span className="text-gray-900">${getCartTotal().toFixed(2)}</span>
-                  </div>
-                  <div className="space-y-2">
-                    <Button onClick={() => setIsPaymentModalOpen(true)} className="w-full">Process Payment</Button>
-                    <Button onClick={holdOrder} variant="outline" className="w-full">Hold Order</Button>
-                    <Button onClick={clearOrder} variant="destructive" className="w-full">Clear Order</Button>
-                  </div>
-                </div>
-              </>)}
-          </CardContent>
-        </Card>
+        <CartPanel
+          title={table ? `Table ${table.name}` : 'Order'}
+          items={pos.cart}
+          totals={pos.totals}
+          notice={pos.notice}
+          emptyMessage={table ? 'No items yet. Tap a menu item to add it.' : 'Select a table to open its order.'}
+          onQuantity={pos.setQuantity}
+          onRemove={pos.removeItem}
+          onPay={() => setPaying(true)}
+          actions={
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={closeTable}>
+                Keep open
+              </Button>
+              <Button variant="destructive" onClick={clearTable}>
+                Clear table
+              </Button>
+            </div>
+          }
+        />
       </div>
 
-      <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Select Payment Method">
-        <div className="space-y-4">
-          <div className="flex flex-col space-y-2">
-            <Label htmlFor="payment-cash" className="flex items-center gap-2 text-gray-900"><input type="radio" id="payment-cash" name="payment-method" value="cash" checked={paymentMethod === 'cash'} onChange={() => setPaymentMethod('cash')} className="form-radio" />Cash</Label>
-            <Label htmlFor="payment-card" className="flex items-center gap-2 text-gray-900"><input type="radio" id="payment-card" name="payment-method" value="card" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} className="form-radio" />Card</Label>
-            <Label htmlFor="payment-hybrid" className="flex items-center gap-2 text-gray-900"><input type="radio" id="payment-hybrid" name="payment-method" value="hybrid" checked={paymentMethod === 'hybrid'} onChange={() => setPaymentMethod('hybrid')} className="form-radio" />Hybrid</Label>
-          </div>
-          {paymentMethod === 'hybrid' && (<div className="space-y-2">
-              <div>
-                <Label htmlFor="cash-amount" className="block text-sm font-medium text-gray-900">Cash Amount</Label>
-                <Input type="number" id="cash-amount" value={cashAmountInput} onChange={(e) => { const cash = Number(e.target.value); setCashAmountInput(cash); const remaining = getCartTotal() - cash; setCardAmountInput(Math.max(0, remaining)); }} className="w-full text-gray-900" />
-              </div>
-              <div>
-                <Label htmlFor="card-amount" className="block text-sm font-medium text-gray-900">Card Amount</Label>
-                <Input type="number" id="card-amount" value={cardAmountInput} onChange={(e) => { const card = Number(e.target.value); setCardAmountInput(card); const remaining = getCartTotal() - card; setCashAmountInput(Math.max(0, remaining)); }} className="w-full text-g  ray-900" />
-              </div>
-            </div>)}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleConfirmPayment}>Confirm Payment</Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isReceiptModalOpen} onClose={handleCloseReceiptModal} title="Receipt">
-        {receipt && (
-          <div>
-            <div id="receipt-content"><ReceiptComponent receipt={receipt} /></div>
-            <div className="mt-4 flex space-x-2">
-              <Button onClick={handlePrintReceipt}>Print</Button>
-              <Button onClick={handleDownloadReceipt}>Download PDF</Button>
-              <Button variant="outline" onClick={handleCloseReceiptModal}>Close</Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      <MobileCartBar totals={pos.totals} />
+      <PaymentModal isOpen={paying} total={pos.totals.total} onClose={() => setPaying(false)} onConfirm={confirmPayment} />
+      <ReceiptModal receipt={receipt} settings={pos.settings} onClose={() => setReceipt(null)} />
     </CashierLayout>
   );
 }
+
+export default withAuth(DineInPage, ['cashier', 'admin']);

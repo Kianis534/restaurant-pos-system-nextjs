@@ -1,198 +1,247 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
+import { BadgePercent, DollarSign, Download, Landmark, Receipt as ReceiptIcon, Search, ShoppingCart } from 'lucide-react';
+import type { Order } from '@/types';
 import withAuth from '@/components/auth/withAuth';
-import { Order, Product } from '@/types';
-import { StorageService } from '@/lib/storage';
+import { storage } from '@/lib/storage';
+import { formatDate, formatDateTime, formatMoney, toLocalDateKey } from '@/lib/format';
+import { filterOrders, ordersToCsv, summarize, type DateRange } from '@/lib/reports';
+import { paymentLabel } from '@/lib/receipt';
+import { useStoredData } from '@/hooks/useStoredData';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { DollarSign, ShoppingCart, TrendingUp, Search, Loader2 } from 'lucide-react';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
 import { OrderDetailsSheet } from '@/components/admin/OrderDetailsSheet';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Field } from '@/components/ui/Label';
+import { PageHeader, StatCard } from '@/components/ui/PageHeader';
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+
+const NO_ORDERS: Order[] = [];
+
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return toLocalDateKey(d);
+}
+
+const PRESETS: { label: string; range: () => DateRange }[] = [
+  { label: 'Today', range: () => ({ from: daysAgo(0), to: daysAgo(0) }) },
+  { label: 'Last 7 days', range: () => ({ from: daysAgo(6), to: daysAgo(0) }) },
+  { label: 'Last 30 days', range: () => ({ from: daysAgo(29), to: daysAgo(0) }) },
+  { label: 'All time', range: () => ({ from: '', to: '' }) },
+];
 
 function ReportsPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [foundOrder, setFoundOrder] = useState<Order | null>(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const orders = useStoredData('orders', () => storage.getOrders(), NO_ORDERS);
+  const [range, setRange] = useState<DateRange>({ from: '', to: '' });
+  const [query, setQuery] = useState('');
   const [searchMessage, setSearchMessage] = useState('');
-  const storage = new StorageService();
+  const [selected, setSelected] = useState<Order | null>(null);
 
-  useEffect(() => {
-    setOrders(storage.getOrders().filter(o => o.status === 'completed'));
-    setProducts(storage.getProducts());
-    setIsLoading(false);
-  }, []);
+  const inRange = useMemo(
+    () => filterOrders(orders, range).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [orders, range],
+  );
+  const summary = useMemo(() => summarize(inRange), [inRange]);
 
-  const totalSales = useMemo(() => {
-    return orders.reduce((sum, order) => sum + order.total, 0);
-  }, [orders]);
-
-  const totalOrders = useMemo(() => {
-    return orders.length;
-  }, [orders]);
-
-  const averageOrderValue = useMemo(() => {
-    return totalOrders > 0 ? totalSales / totalOrders : 0;
-  }, [totalSales, totalOrders]);
-
-  const bestSellingProducts = useMemo(() => {
-    const productSales = new Map<string, { name: string; quantity: number }>();
-    orders.forEach(order => {
-      order.items.forEach(item => {
-        const existing = productSales.get(item.productId);
-        const quantity = (existing?.quantity || 0) + item.quantity;
-        productSales.set(item.productId, { name: item.productName, quantity });
-      });
-    });
-    return Array.from(productSales.values())
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 5);
-  }, [orders]);
-
-  const handleSearch = () => {
-    const allOrders = storage.getOrders();
-    const order = allOrders.find(o => o.orderNumber === searchQuery);
-    if (order) {
-      setFoundOrder(order);
-      setIsSheetOpen(true);
-      setSearchMessage('');
-    } else {
-      setFoundOrder(null);
-      setIsSheetOpen(false);
-      setSearchMessage('No order found with that ID.');
-    }
+  const search = (event: FormEvent) => {
+    event.preventDefault();
+    const term = query.trim().toLowerCase();
+    if (!term) return;
+    const found = orders.find((o) => o.orderNumber.toLowerCase() === term) ?? orders.find((o) => o.orderNumber.toLowerCase().includes(term));
+    setSearchMessage(found ? '' : `No order matches "${query.trim()}".`);
+    setSelected(found ?? null);
   };
 
-  if (isLoading) {
-    return (
-      <AdminLayout>
-        <div className="flex items-center justify-center h-full">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-        </div>
-      </AdminLayout>
-    );
-  }
+  const exportCsv = () => {
+    const blob = new Blob([ordersToCsv(inRange)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `orders-${range.from || 'start'}-to-${range.to || toLocalDateKey(new Date())}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const presetActive = (p: (typeof PRESETS)[number]) => {
+    const r = p.range();
+    return r.from === range.from && r.to === range.to;
+  };
 
   return (
     <AdminLayout>
-      <h1 className="text-2xl font-bold mb-6 text-gray-900">Reports</h1>
+      <PageHeader
+        title="Reports"
+        description="Sales for the period you choose."
+        actions={
+          <Button variant="outline" onClick={exportCsv} disabled={inRange.length === 0}>
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
+        }
+      />
 
-      {/* Search Section */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Search Order</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex w-full max-w-sm items-center space-x-2">
-            <Input
-              type="text"
-              placeholder="Enter order ID"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="border-gray-300"
-            />
-            <Button onClick={handleSearch}><Search className="mr-2 h-4 w-4" /> Search</Button>
+      <Card>
+        <CardContent className="flex flex-col gap-4 pt-5 sm:pt-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="From" htmlFor="from">
+              <Input id="from" type="date" value={range.from} max={range.to || undefined} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} />
+            </Field>
+            <Field label="To" htmlFor="to">
+              <Input id="to" type="date" value={range.to} min={range.from || undefined} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} />
+            </Field>
+            <div className="flex flex-wrap gap-1.5">
+              {PRESETS.map((p) => (
+                <Button key={p.label} size="sm" variant={presetActive(p) ? 'default' : 'outline'} onClick={() => setRange(p.range())}>
+                  {p.label}
+                </Button>
+              ))}
+            </div>
           </div>
-          {searchMessage && <p className="mt-2 text-red-600">{searchMessage}</p>}
+          <form onSubmit={search} className="w-full max-w-xs space-y-1.5" noValidate>
+            <label htmlFor="order-search" className="text-sm font-medium text-gray-900">
+              Find an order
+            </label>
+            <div className="flex gap-2">
+              <Input id="order-search" placeholder="e.g. ORD-000012" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <Button type="submit" variant="secondary" aria-label="Search orders">
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
+            {searchMessage && (
+              <p className="text-sm text-red-600" role="alert">
+                {searchMessage}
+              </p>
+            )}
+          </form>
         </CardContent>
       </Card>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-            <DollarSign className="h-4 w-4 text-gray-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">${totalSales.toFixed(2)}</div>
-            <p className="text-xs text-gray-500">All completed sales</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-gray-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{totalOrders}</div>
-            <p className="text-xs text-gray-500">Number of completed orders</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Order Value</CardTitle>
-            <TrendingUp className="h-4 w-4 text-gray-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">${averageOrderValue.toFixed(2)}</div>
-            <p className="text-xs text-gray-500">Average value per order</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard label="Revenue" value={formatMoney(summary.revenue)} icon={<DollarSign className="h-4 w-4" />} />
+        <StatCard label="Orders" value={summary.orders} icon={<ShoppingCart className="h-4 w-4" />} />
+        <StatCard label="Average order" value={formatMoney(summary.average)} icon={<ReceiptIcon className="h-4 w-4" />} />
+        <StatCard label="Tax collected" value={formatMoney(summary.tax)} icon={<Landmark className="h-4 w-4" />} />
+        <StatCard label="Discounts given" value={formatMoney(summary.discounts)} icon={<BadgePercent className="h-4 w-4" />} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Best Selling Products */}
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Top 5 Best-Selling Products</CardTitle>
+            <CardTitle>Best sellers</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-gray-900">Product Name</TableHead>
-                  <TableHead className="text-right text-gray-900">Quantity Sold</TableHead>
+                  <TableHead>Item</TableHead>
+                  <TableHead className="text-right">Sold</TableHead>
+                  <TableHead className="text-right">Revenue</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bestSellingProducts.map((p, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium text-gray-900">{p.name}</TableCell>
-                    <TableCell className="text-right text-gray-900">{p.quantity}</TableCell>
+                {summary.topItems.map((item) => (
+                  <TableRow key={item.productId}>
+                    <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableCell className="text-right">{item.quantity}</TableCell>
+                    <TableCell className="text-right">{formatMoney(item.revenue)}</TableCell>
                   </TableRow>
                 ))}
+                {summary.topItems.length === 0 && <TableEmpty colSpan={3}>No sales in this period.</TableEmpty>}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
 
-        {/* Recent Orders */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Orders</CardTitle>
+            <CardTitle>How customers paid</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableBody>
+                {(['cash', 'card', 'split'] as const).map((m) => (
+                  <TableRow key={m}>
+                    <TableCell>{paymentLabel(m)}</TableCell>
+                    <TableCell className="text-right">{formatMoney(summary.byPayment[m])}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow>
+                  <TableCell>Dine-in orders</TableCell>
+                  <TableCell className="text-right">{formatMoney(summary.byType['dine-in'])}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Takeaway orders</TableCell>
+                  <TableCell className="text-right">{formatMoney(summary.byType.takeaway)}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Sales by day</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-gray-900">Order ID</TableHead>
-                  <TableHead className="text-gray-900">Date</TableHead>
-                  <TableHead className="text-right text-gray-900">Total</TableHead>
+                  <TableHead>Day</TableHead>
+                  <TableHead className="text-right">Orders</TableHead>
+                  <TableHead className="text-right">Revenue</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orders.slice(0, 5).map(order => (
-                  <TableRow key={order.id} onClick={() => { setFoundOrder(order); setIsSheetOpen(true); }} className="cursor-pointer">
-                    <TableCell className="font-medium text-gray-900">{order.orderNumber}</TableCell>
-                    <TableCell className="text-gray-900">{new Date(order.createdAt).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-right text-gray-900">${order.total.toFixed(2)}</TableCell>
+                {summary.byDay.slice(0, 14).map((d) => (
+                  <TableRow key={d.day}>
+                    <TableCell>{formatDate(`${d.day}T00:00:00`)}</TableCell>
+                    <TableCell className="text-right">{d.orders}</TableCell>
+                    <TableCell className="text-right">{formatMoney(d.revenue)}</TableCell>
                   </TableRow>
                 ))}
+                {summary.byDay.length === 0 && <TableEmpty colSpan={3}>No sales in this period.</TableEmpty>}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {inRange.slice(0, 15).map((o) => (
+                  <TableRow
+                    key={o.id}
+                    className="cursor-pointer"
+                    tabIndex={0}
+                    onClick={() => setSelected(o)}
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelected(o)}
+                  >
+                    <TableCell className="font-medium text-blue-700">{o.orderNumber}</TableCell>
+                    <TableCell>{formatDateTime(o.createdAt)}</TableCell>
+                    <TableCell className="text-right">{formatMoney(o.total)}</TableCell>
+                  </TableRow>
+                ))}
+                {inRange.length === 0 && <TableEmpty colSpan={3}>No orders in this period.</TableEmpty>}
+              </TableBody>
+            </Table>
+            {inRange.length > 15 && <p className="mt-3 text-sm text-gray-500">Showing the latest 15 of {inRange.length}. Export CSV for all.</p>}
+          </CardContent>
+        </Card>
       </div>
-      <OrderDetailsSheet
-        order={foundOrder}
-        isOpen={isSheetOpen}
-        onOpenChange={setIsSheetOpen}
-      />
+
+      <OrderDetailsSheet order={selected} onClose={() => setSelected(null)} />
     </AdminLayout>
   );
 }

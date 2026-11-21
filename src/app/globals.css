@@ -1,43 +1,59 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+:root {
+  color-scheme: light;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  @apply bg-gray-100 text-gray-900 antialiased;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
+/* react-select (multi-select pickers) */
+.rs__control {
+  @apply min-h-10 rounded-md border-gray-300 shadow-none;
+}
+.rs__control--is-focused {
+  @apply border-blue-500 ring-2 ring-blue-500/40;
+}
+.rs__menu {
+  z-index: 30 !important;
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+/* Printing: only the receipt is printed, sized for an 80 mm thermal roll. */
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+  /* Collapse everything that doesn't hold the receipt, so no blank pages follow it. */
+  body > *:not(:has(.print-area)) {
+    display: none !important;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible !important;
+  }
+  .print-area {
+    position: absolute !important;
+    left: 0;
+    top: 0;
+    width: 80mm;
+  }
+  .modal-content {
+    position: static !important;
+    transform: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
 }
