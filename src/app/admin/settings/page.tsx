@@ -18,6 +18,7 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Field, Label } from '@/components/ui/Label';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Spinner } from '@/components/ui/Spinner';
+import { useFeedback } from '@/components/ui/Feedback';
 
 const NO_PRODUCTS: Product[] = [];
 const DEFAULT_SETTINGS: Settings = seedSettings();
@@ -29,7 +30,7 @@ function SettingsForm({ settings, products }: { settings: Settings; products: Pr
   const [header, setHeader] = useState(settings.receiptHeader);
   const [footer, setFooter] = useState(settings.receiptFooter);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const { toast } = useFeedback();
   const options: Option[] = products.map((p) => ({ value: p.id, label: p.name }));
 
   const save = (event: FormEvent) => {
@@ -37,16 +38,15 @@ function SettingsForm({ settings, products }: { settings: Settings; products: Pr
     const rate = Number(taxPercent);
     if (taxPercent.trim() === '' || !Number.isFinite(rate) || rate < 0 || rate > 100) {
       setError('Tax rate must be between 0 and 100.');
-      setSaved(false);
       return;
     }
     storage.saveSettings({ taxRate: rate / 100, taxExemptProductIds: exempt, receiptHeader: header, receiptFooter: footer });
     setError(null);
-    setSaved(true);
+    toast('Settings saved.');
   };
 
   return (
-    <form onSubmit={save} className="space-y-6" noValidate onChange={() => setSaved(false)}>
+    <form onSubmit={save} className="space-y-6" noValidate>
       <Card>
         <CardHeader>
           <CardTitle>Tax</CardTitle>
@@ -74,10 +74,7 @@ function SettingsForm({ settings, products }: { settings: Settings; products: Pr
               isMulti
               options={options}
               value={options.filter((o) => exempt.includes(o.value))}
-              onChange={(next) => {
-                setExempt(next.map((o) => o.value));
-                setSaved(false);
-              }}
+              onChange={(next) => setExempt(next.map((o) => o.value))}
               classNamePrefix="rs"
               placeholder="None"
             />
@@ -101,11 +98,6 @@ function SettingsForm({ settings, products }: { settings: Settings; products: Pr
       </Card>
 
       <div className="flex items-center justify-end gap-3">
-        {saved && (
-          <p className="text-sm text-green-700" role="status">
-            Settings saved.
-          </p>
-        )}
         <Button type="submit">Save settings</Button>
       </div>
     </form>
@@ -116,32 +108,46 @@ function DataCard() {
   const router = useRouter();
   const { logout } = useAuth();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const { toast, confirm } = useFeedback();
 
   const exportBackup = () => {
     const blob = new Blob([JSON.stringify(storage.exportData(), null, 2)], { type: 'application/json' });
     downloadBlob(blob, `pos-backup-${toLocalDateKey(new Date())}.json`);
-    setMessage({ tone: 'ok', text: 'Backup downloaded. It contains password hashes, so keep it private.' });
+    toast('Backup downloaded. It contains password hashes, so keep it private.');
   };
 
   const importBackup = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!window.confirm('Replace ALL data on this device with the backup? This cannot be undone.')) return;
+    const ok = await confirm({
+      title: 'Restore from this backup?',
+      description: `Everything on this device will be replaced with "${file.name}". This cannot be undone, and you will be signed out.`,
+      confirmLabel: 'Restore',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       storage.importData(JSON.parse(await file.text()));
       logout();
+      toast('Backup restored. Sign in with an account from the backup.');
       router.replace('/login');
     } catch (error) {
-      setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'That file could not be read.' });
+      toast(error instanceof Error ? error.message : 'That file could not be read.', { tone: 'error' });
     }
   };
 
-  const reset = () => {
-    if (!window.confirm('Delete all orders, receipts, staff and menu changes on this device and reload the demo data?')) return;
+  const reset = async () => {
+    const ok = await confirm({
+      title: 'Reset to demo data?',
+      description: 'All orders, receipts, staff and menu changes on this device are deleted and the demo data is loaded again. You will be signed out.',
+      confirmLabel: 'Reset',
+      destructive: true,
+    });
+    if (!ok) return;
     storage.resetToDemoData();
     logout();
+    toast('Demo data restored.');
     router.replace('/login');
   };
 
@@ -167,11 +173,6 @@ function DataCard() {
             <RotateCcw className="h-4 w-4" /> Reset to demo data
           </Button>
         </div>
-        {message && (
-          <p className={message.tone === 'ok' ? 'text-sm text-green-700' : 'text-sm text-red-600'} role={message.tone === 'error' ? 'alert' : 'status'}>
-            {message.text}
-          </p>
-        )}
       </CardContent>
     </Card>
   );

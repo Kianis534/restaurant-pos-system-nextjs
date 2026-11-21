@@ -11,6 +11,7 @@ import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge, PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { useFeedback } from '@/components/ui/Feedback';
 
 const NO_DISCOUNTS: Discount[] = [];
 const NO_PRODUCTS: Product[] = [];
@@ -22,6 +23,7 @@ const localDay = (key: string) => formatDate(`${key}T00:00:00`);
 function DiscountsPage() {
   const discounts = useStoredData('discounts', () => storage.getDiscounts(), NO_DISCOUNTS);
   const products = useStoredData('products', () => storage.getProducts(), NO_PRODUCTS);
+  const { toast, confirm } = useFeedback();
 
   const appliesTo = (d: Discount) => {
     if (d.type === 'all') return 'Whole menu';
@@ -29,8 +31,10 @@ function DiscountsPage() {
     return `Item: ${products.find((p) => p.id === d.target)?.name ?? 'deleted item'}`;
   };
 
-  const remove = (d: Discount) => {
-    if (window.confirm(`Delete the "${d.name}" discount?`)) storage.saveDiscounts(discounts.filter((x) => x.id !== d.id));
+  const remove = async (d: Discount) => {
+    if (!(await confirm({ title: `Delete the "${d.name}" discount?`, confirmLabel: 'Delete', destructive: true }))) return;
+    storage.saveDiscounts(storage.getDiscounts().filter((x) => x.id !== d.id));
+    toast(`Deleted the "${d.name}" discount.`);
   };
 
   return (

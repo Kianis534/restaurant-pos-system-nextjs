@@ -10,12 +10,14 @@ import { clearError, validateDeal, type Errors } from '@/lib/validation';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { useFeedback } from '@/components/ui/Feedback';
 import { Field, Label } from '@/components/ui/Label';
 
 type Option = { value: string; label: string };
 
 export function DealForm({ deal, products }: { deal?: Product; products: Product[] }) {
   const router = useRouter();
+  const { toast } = useFeedback();
   const items = products.filter((p) => !p.isDeal);
   const options: Option[] = items.map((p) => ({ value: p.id, label: `${p.name} (${formatMoney(p.price)})` }));
   const [name, setName] = useState(deal?.name ?? '');
@@ -43,6 +45,7 @@ export function DealForm({ deal, products }: { deal?: Product; products: Product
       dealItems: selected,
     };
     storage.saveProducts(deal ? all.map((p) => (p.id === deal.id ? saved : p)) : [...all, saved]);
+    toast(deal ? `Saved "${saved.name}".` : `Added the "${saved.name}" deal.`);
     router.push('/admin/products');
   };
 

@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Badge, PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { useFeedback } from '@/components/ui/Feedback';
 
 const NO_PRODUCTS: Product[] = [];
 const NO_CATEGORIES: Category[] = [];
@@ -24,6 +25,7 @@ function MenuPage() {
   const [search, setSearch] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [categoryError, setCategoryError] = useState<string | null>(null);
+  const { toast, confirm } = useFeedback();
 
   const term = search.trim().toLowerCase();
   const items = useMemo(
@@ -33,18 +35,25 @@ function MenuPage() {
   const deals = useMemo(() => products.filter((p) => p.isDeal && (!term || p.name.toLowerCase().includes(term))), [products, term]);
   const nameOf = (id: string) => products.find((p) => p.id === id)?.name;
 
-  const deleteProduct = (product: Product) => {
+  const deleteProduct = async (product: Product) => {
     const usedIn = products.filter((p) => p.isDeal && p.dealItems?.includes(product.id));
-    const warning = usedIn.length ? `\n\nIt will also be taken out of: ${usedIn.map((d) => d.name).join(', ')}.` : '';
-    if (!window.confirm(`Delete "${product.name}"?${warning}`)) return;
+    const ok = await confirm({
+      title: `Delete ${product.isDeal ? 'deal' : 'item'} "${product.name}"?`,
+      description: usedIn.length ? `It will also be taken out of: ${usedIn.map((d) => d.name).join(', ')}.` : 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     const settings = storage.getSettings();
     storage.saveProducts(
-      products
+      storage
+        .getProducts()
         .filter((p) => p.id !== product.id)
         .map((p) => (p.isDeal && p.dealItems?.includes(product.id) ? { ...p, dealItems: p.dealItems.filter((id) => id !== product.id) } : p)),
     );
     storage.saveSettings({ ...settings, taxExemptProductIds: settings.taxExemptProductIds.filter((id) => id !== product.id) });
     storage.saveDiscounts(storage.getDiscounts().filter((d) => !(d.type === 'item' && d.target === product.id)));
+    toast(`Deleted "${product.name}".`);
   };
 
   const addCategory = (event: FormEvent) => {
@@ -53,16 +62,23 @@ function MenuPage() {
     setCategoryError(problem);
     if (problem) return;
     storage.saveCategories([...categories, { id: uuidv4(), name: newCategory.trim() }]);
+    toast(`Added the "${newCategory.trim()}" category.`);
     setNewCategory('');
   };
 
-  const deleteCategory = (category: Category) => {
+  const deleteCategory = async (category: Category) => {
     const count = products.filter((p) => p.category === category.name).length;
-    const note = count ? ` ${count} item(s) will become uncategorised.` : '';
-    if (!window.confirm(`Delete the "${category.name}" category?${note}`)) return;
-    storage.saveProducts(products.map((p) => (p.category === category.name ? { ...p, category: '' } : p)));
-    storage.saveCategories(categories.filter((c) => c.id !== category.id));
+    const ok = await confirm({
+      title: `Delete the "${category.name}" category?`,
+      description: count ? `${count} item${count === 1 ? '' : 's'} will become uncategorised. Discounts for this category are removed too.` : undefined,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    storage.saveProducts(storage.getProducts().map((p) => (p.category === category.name ? { ...p, category: '' } : p)));
+    storage.saveCategories(storage.getCategories().filter((c) => c.id !== category.id));
     storage.saveDiscounts(storage.getDiscounts().filter((d) => !(d.type === 'category' && d.target === category.name)));
+    toast(`Deleted the "${category.name}" category.`);
   };
 
   return (

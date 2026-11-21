@@ -10,6 +10,7 @@ import { clearError, validateEmployee, type Errors } from '@/lib/validation';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
+import { useFeedback } from '@/components/ui/Feedback';
 import { Field } from '@/components/ui/Label';
 
 const ROLES: { value: Role; label: string }[] = [
@@ -20,6 +21,7 @@ const ROLES: { value: Role; label: string }[] = [
 
 export function EmployeeForm({ employee }: { employee?: User }) {
   const router = useRouter();
+  const { toast } = useFeedback();
   const { user: me, refreshUser } = useAuth();
   const [values, setValues] = useState({
     name: employee?.name ?? '',
@@ -67,6 +69,7 @@ export function EmployeeForm({ employee }: { employee?: User }) {
       };
       storage.saveUsers(employee ? all.map((u) => (u.id === employee.id ? saved : u)) : [...all, saved]);
       if (employee?.id === me?.id) refreshUser();
+      toast(employee ? `Saved ${saved.name}.` : `Added ${saved.name}. They can sign in as ${saved.employeeNo}.`);
       router.push('/admin/employees');
     } finally {
       setSaving(false);

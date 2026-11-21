@@ -16,6 +16,7 @@ import { PaymentModal } from '@/components/pos/PaymentModal';
 import { ReceiptModal } from '@/components/pos/ReceiptModal';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { useFeedback } from '@/components/ui/Feedback';
 
 const NO_TABLES: Table[] = [];
 const NO_AREAS: Area[] = [];
@@ -25,6 +26,7 @@ const NO_TOTALS = cartTotals([]);
 function DineInPage() {
   const { user } = useAuth();
   const pos = usePosCart();
+  const { confirm } = useFeedback();
   const tables = useStoredData('tables', () => storage.getTables(), NO_TABLES);
   const areas = useStoredData('areas', () => storage.getAreas(), NO_AREAS);
   const held = useStoredData('heldTableOrders', () => storage.getHeldTableOrders(), NO_HELD);
@@ -62,9 +64,15 @@ function DineInPage() {
     pos.clearCart();
   };
 
-  const clearTable = () => {
-    if (!activeTableId || !window.confirm('Remove every item from this table?')) return;
-    pos.clearCart();
+  const clearTable = async () => {
+    if (!table) return;
+    const ok = await confirm({
+      title: `Clear table ${table.name}?`,
+      description: 'Every item on this table is removed. Nothing is charged.',
+      confirmLabel: 'Clear table',
+      destructive: true,
+    });
+    if (ok) pos.clearCart();
   };
 
   const confirmPayment = (payment: Parameters<typeof pos.checkout>[0]) => {

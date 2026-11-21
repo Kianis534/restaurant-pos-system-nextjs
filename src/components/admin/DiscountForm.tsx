@@ -9,6 +9,7 @@ import { clearError, validateDiscount, type Errors } from '@/lib/validation';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
+import { useFeedback } from '@/components/ui/Feedback';
 import { Field } from '@/components/ui/Label';
 
 const TYPES: { value: DiscountType; label: string }[] = [
@@ -19,6 +20,7 @@ const TYPES: { value: DiscountType; label: string }[] = [
 
 export function DiscountForm({ discount, products, categories }: { discount?: Discount; products: Product[]; categories: Category[] }) {
   const router = useRouter();
+  const { toast } = useFeedback();
   const [values, setValues] = useState({
     name: discount?.name ?? '',
     type: (discount?.type ?? 'all') as DiscountType,
@@ -50,6 +52,7 @@ export function DiscountForm({ discount, products, categories }: { discount?: Di
     };
     const all = storage.getDiscounts();
     storage.saveDiscounts(discount ? all.map((d) => (d.id === discount.id ? saved : d)) : [...all, saved]);
+    toast(discount ? `Saved the "${saved.name}" discount.` : `Added the "${saved.name}" discount.`);
     router.push('/admin/discounts');
   };
 

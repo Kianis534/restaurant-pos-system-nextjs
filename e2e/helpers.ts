@@ -48,6 +48,14 @@ export async function addToCart(page: Page, name: string, times = 1) {
   }
 }
 
+/** Answers the app's confirm dialog by clicking one of its buttons. */
+export async function answerConfirm(page: Page, button: string) {
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: button, exact: true }).click();
+  await expect(dialog).toBeHidden();
+}
+
 /** Fails if the page is wider than the viewport (sideways scrolling on phones). */
 export async function expectNoHorizontalScroll(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
