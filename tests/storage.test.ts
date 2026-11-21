@@ -109,6 +109,17 @@ describe('robustness', () => {
     expect(storage.getHeldTableOrders()).toEqual({});
   });
 
+  it('keeps the takeaway order in progress and clears it when empty', () => {
+    const store = memoryStore();
+    const storage = new StorageService(store);
+    const item = { id: 'x', productId: 'p', productName: 'P', quantity: 1, price: 2, discount: 0, tax: 0.2, total: 2.2 };
+    storage.saveTakeawayDraft([item]);
+    expect(storage.getTakeawayDraft()).toEqual([item]);
+    storage.saveTakeawayDraft([]);
+    expect(store.getItem('pos_takeaway_draft')).toBeNull();
+    expect(storage.getTakeawayDraft()).toEqual([]);
+  });
+
   it('stores only the user id in the session', () => {
     const store = memoryStore();
     new StorageService(store).setSession({ userId: 'u1' });

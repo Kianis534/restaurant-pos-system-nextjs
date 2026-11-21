@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { availableToAdd, deductStock, findStockProblems, stockUsage } from '@/lib/inventory';
+import { availableToAdd, deductStock, findMissingProducts, findStockProblems, stockUsage } from '@/lib/inventory';
 import { burger, combo, fries, line, products } from './fixtures';
 
 describe('stockUsage', () => {
@@ -34,6 +34,14 @@ describe('findStockProblems', () => {
       { productId: 'fries', productName: 'Fries', needed: 3, inStock: 2 },
     ]);
     expect(findStockProblems([line('burger', 5)], products)).toEqual([]);
+  });
+});
+
+describe('findMissingProducts', () => {
+  it('finds lines whose menu item was deleted', () => {
+    const cart = [line('burger', 1), line('deleted-dish', 2)];
+    expect(findMissingProducts(cart, products).map((l) => l.productId)).toEqual(['deleted-dish']);
+    expect(findMissingProducts([line('combo', 1)], products)).toEqual([]);
   });
 });
 

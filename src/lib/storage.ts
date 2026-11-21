@@ -47,6 +47,7 @@ const KEYS = {
   receipts: 'pos_receipts',
   heldTableOrders: 'pos_held_orders',
   heldTakeawayOrders: 'pos_walkin_held_orders',
+  takeawayDraft: 'pos_takeaway_draft',
   settings: 'pos_settings',
   session: 'pos_session',
 } as const;
@@ -398,6 +399,17 @@ export class StorageService {
   }
   saveHeldTakeawayOrders(orders: OrderItem[][]): void {
     this.write(KEYS.heldTakeawayOrders, orders.filter((o) => o.length > 0));
+  }
+
+  /** The takeaway order being rung up right now, so leaving the screen doesn't lose it. */
+  getTakeawayDraft(): OrderItem[] {
+    return list(this.read(KEYS.takeawayDraft), normalizeItem);
+  }
+  saveTakeawayDraft(items: OrderItem[]): void {
+    // Written on every tap, and nothing re-reads it while the screen is open, so it skips
+    // the change event that would make every subscribed screen re-read storage.
+    if (items.length) this.store.setItem(KEYS.takeawayDraft, JSON.stringify(items));
+    else this.store.removeItem(KEYS.takeawayDraft);
   }
 
   // Settings

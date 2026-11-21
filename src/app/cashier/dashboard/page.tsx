@@ -94,7 +94,7 @@ function CashierDashboard() {
                   <TableCell className="text-right">{formatMoney(order.total)}</TableCell>
                 </TableRow>
               ))}
-              {stats.recent.length === 0 && <TableEmpty colSpan={5}>No orders yet today.</TableEmpty>}
+              {stats.recent.length === 0 && <TableEmpty colSpan={5}>No orders yet.</TableEmpty>}
             </TableBody>
           </Table>
         </CardContent>

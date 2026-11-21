@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 const NO_TABLES: Table[] = [];
 const NO_AREAS: Area[] = [];
 const NO_HELD: Record<string, OrderItem[]> = {};
+const NO_TOTALS = cartTotals([]);
 
 function DineInPage() {
   const { user } = useAuth();
@@ -32,14 +33,18 @@ function DineInPage() {
   const [tableId, setTableId] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  // If an admin deletes the selected table in another tab, treat it as deselected instead of
+  // writing an orphaned tab for a table that no longer exists.
   const table = tables.find((t) => t.id === tableId) ?? null;
+  const activeTableId = table?.id ?? null;
+  const totals = table ? pos.totals : NO_TOTALS;
 
   // A table's order is its running tab: every change is saved straight away, so nothing is
   // lost when the cashier switches tables, reloads or walks away.
   const { cart } = pos;
   useEffect(() => {
-    if (tableId) storage.saveHeldTableOrder(tableId, cart);
-  }, [tableId, cart]);
+    if (activeTableId) storage.saveHeldTableOrder(activeTableId, cart);
+  }, [activeTableId, cart]);
 
   const visibleTables = useMemo(
     () => (areaFilter === 'all' ? tables : tables.filter((t) => t.area === areaFilter || t.area === '')),
@@ -47,7 +52,7 @@ function DineInPage() {
   );
 
   const selectTable = (next: Table) => {
-    if (next.id === tableId) return;
+    if (next.id === activeTableId) return;
     setTableId(next.id);
     pos.loadCart(storage.getHeldTableOrder(next.id));
   };
@@ -58,7 +63,7 @@ function DineInPage() {
   };
 
   const clearTable = () => {
-    if (!tableId || !window.confirm('Remove every item from this table?')) return;
+    if (!activeTableId || !window.confirm('Remove every item from this table?')) return;
     pos.clearCart();
   };
 
@@ -101,7 +106,7 @@ function DineInPage() {
                 {visibleTables.map((t) => {
                   const tab = held[t.id] ?? [];
                   const open = tab.length > 0;
-                  const selected = t.id === tableId;
+                  const selected = t.id === activeTableId;
                   return (
                     <button
                       key={t.id}
@@ -143,9 +148,10 @@ function DineInPage() {
 
         <CartPanel
           title={table ? `Table ${table.name}` : 'Order'}
-          items={pos.cart}
-          totals={pos.totals}
+          items={table ? pos.cart : []}
+          totals={totals}
           notice={pos.notice}
+          unavailable={pos.unavailable}
           emptyMessage={table ? 'No items yet. Tap a menu item to add it.' : 'Select a table to open its order.'}
           onQuantity={pos.setQuantity}
           onRemove={pos.removeItem}
@@ -163,8 +169,8 @@ function DineInPage() {
         />
       </div>
 
-      <MobileCartBar totals={pos.totals} />
-      <PaymentModal isOpen={paying} total={pos.totals.total} onClose={() => setPaying(false)} onConfirm={confirmPayment} />
+      <MobileCartBar totals={totals} />
+      <PaymentModal isOpen={paying} total={totals.total} onClose={() => setPaying(false)} onConfirm={confirmPayment} />
       <ReceiptModal receipt={receipt} settings={pos.settings} onClose={() => setReceipt(null)} />
     </CashierLayout>
   );

@@ -62,6 +62,14 @@ export function findStockProblems(cart: OrderItem[], products: Product[]): Stock
   return problems;
 }
 
+/**
+ * Lines whose menu item has been deleted since they were added (e.g. an order held on a
+ * table while an admin removed the dish). They can't be priced or taken out of stock.
+ */
+export function findMissingProducts(cart: OrderItem[], products: Product[]): OrderItem[] {
+  return cart.filter((item) => !products.some((p) => p.id === item.productId));
+}
+
 /** Returns a new product list with the sold quantities taken off. */
 export function deductStock(products: Product[], cart: OrderItem[]): Product[] {
   const usage = stockUsage(cart, products);
