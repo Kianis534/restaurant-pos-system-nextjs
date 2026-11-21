@@ -444,7 +444,7 @@ On Windows or macOS you can use a browser you already have instead of downloadin
 
 ### GitHub Pages (what the demo uses)
 
-[`.github/workflows/pages.yml`](.github/workflows/pages.yml) builds with `NEXT_PUBLIC_BASE_PATH=/<repository name>`, checks every link, adds `.nojekyll` and publishes `out/`. To use it on your fork, go to **Settings → Pages** and set **Source** to **GitHub Actions**, then push to `main`.
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) builds with `NEXT_PUBLIC_BASE_PATH=/<repository name>`, checks every link and publishes `out/` as a Pages artifact (no Jekyll step, so the `_next` folder is served as-is). To use it on your fork, go to **Settings → Pages** and set **Source** to **GitHub Actions**, then push to `main`.
 
 ### Any static host
 
