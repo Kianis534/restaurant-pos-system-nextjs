@@ -24,7 +24,8 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: CI,
   retries: CI ? 1 : 0,
-  workers: CI ? 2 : undefined,
+  // Half the CPU cores locally: one browser per core can starve a single static server.
+  workers: CI ? 2 : '50%',
   reporter: CI ? [['github'], ['list']] : 'list',
   use: {
     baseURL: REMOTE ?? `http://localhost:${PORT}/`,

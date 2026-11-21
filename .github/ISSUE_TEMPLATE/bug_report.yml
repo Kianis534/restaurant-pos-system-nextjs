@@ -1,0 +1,40 @@
+name: Bug report
+description: Something doesn't work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. For security problems, please follow SECURITY.md instead of opening a public issue.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Which account you used and what you clicked.
+      placeholder: |
+        1. Sign in as cashier001
+        2. Open Takeaway and add ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Include any error message, and a screenshot if you can.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: Live demo or local build, browser, and device.
+      placeholder: Live demo, Chrome 131 on Android
+    validations:
+      required: true
