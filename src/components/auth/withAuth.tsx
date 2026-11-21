@@ -1,42 +1,30 @@
 'use client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useEffect, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { User } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
+import type { Role } from '@/types';
+import { FullPageSpinner } from '@/components/ui/Spinner';
 
-const withAuth = <P extends object>(
-  WrappedComponent: React.ComponentType<P>,
-  allowedRoles: User['role'][]
-) => {
-  const WithAuthComponent = (props: P) => {
+/**
+ * Client-side route guard. Sends signed-out visitors to /login and the wrong role to
+ * /unauthorized. This is a UI guard only: everything runs in the browser, so it keeps
+ * honest users on the right screens but it is not a security boundary (see README).
+ */
+export default function withAuth<P extends object>(WrappedComponent: ComponentType<P>, allowedRoles: Role[]) {
+  function WithAuth(props: P) {
     const { user, isLoading } = useAuth();
     const router = useRouter();
+    const allowed = !!user && allowedRoles.includes(user.role);
 
     useEffect(() => {
-      if (!isLoading) {
-        if (!user) {
-          router.replace('/auth/login');
-        } else if (!allowedRoles.includes(user.role)) {
-          router.replace('/unauthorized'); // Or some other page
-        }
-      }
+      if (isLoading) return;
+      if (!user) router.replace('/login');
+      else if (!allowedRoles.includes(user.role)) router.replace('/unauthorized');
     }, [user, isLoading, router]);
 
-    if (isLoading || !user || !allowedRoles.includes(user.role)) {
-      return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading...</p>
-          </div>
-        </div>
-      );
-    }
-
+    if (isLoading || !allowed) return <FullPageSpinner />;
     return <WrappedComponent {...props} />;
-  };
-
-  return WithAuthComponent;
-};
-
-export default withAuth;
+  }
+  WithAuth.displayName = `withAuth(${WrappedComponent.displayName || WrappedComponent.name || 'Component'})`;
+  return WithAuth;
+}
