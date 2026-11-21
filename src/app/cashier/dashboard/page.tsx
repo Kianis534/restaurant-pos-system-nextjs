@@ -1,7 +1,8 @@
 'use client';
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { Package, UtensilsCrossed } from 'lucide-react';
-import type { Order, OrderItem, Table as TableType } from '@/types';
+import type { Order, OrderItem, Receipt, Table as TableType } from '@/types';
 import withAuth from '@/components/auth/withAuth';
 import { useAuth } from '@/contexts/AuthContext';
 import { storage } from '@/lib/storage';
@@ -16,12 +17,15 @@ import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableR
 const NO_ORDERS: Order[] = [];
 const NO_TABLES: TableType[] = [];
 const NO_HELD: Record<string, OrderItem[]> = {};
+const NO_RECEIPTS: Receipt[] = [];
 
 function CashierDashboard() {
   const { user } = useAuth();
   const orders = useStoredData('orders', () => storage.getOrders(), NO_ORDERS);
   const tables = useStoredData('tables', () => storage.getTables(), NO_TABLES);
   const held = useStoredData('heldTableOrders', () => storage.getHeldTableOrders(), NO_HELD);
+  const receipts = useStoredData('receipts', () => storage.getReceipts(), NO_RECEIPTS);
+  const receiptFor = (orderId: string) => receipts.find((r) => r.orderId === orderId);
 
   const stats = useMemo(() => {
     const today = toLocalDateKey(new Date());
@@ -87,7 +91,18 @@ function CashierDashboard() {
             <TableBody>
               {stats.recent.map((order) => (
                 <TableRow key={order.id}>
-                  <TableCell className="font-medium">{order.orderNumber}</TableCell>
+                  <TableCell className="font-medium">
+                    {receiptFor(order.id) ? (
+                      <Link
+                        href={`/cashier/bills/view?id=${encodeURIComponent(receiptFor(order.id)!.id)}`}
+                        className="text-blue-700 hover:underline"
+                      >
+                        {order.orderNumber}
+                      </Link>
+                    ) : (
+                      order.orderNumber
+                    )}
+                  </TableCell>
                   <TableCell>{order.type === 'dine-in' ? `Dine-in ${order.tableName ?? ''}` : 'Takeaway'}</TableCell>
                   <TableCell>{capitalize(order.kitchenStatus)}</TableCell>
                   <TableCell>{formatTime(order.createdAt)}</TableCell>

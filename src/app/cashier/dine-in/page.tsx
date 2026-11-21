@@ -149,6 +149,7 @@ function DineInPage() {
           products={pos.products}
           ctx={pos.ctx}
           available={pos.available}
+          inCart={table ? pos.inCart : undefined}
           onAdd={pos.addProduct}
           disabled={!table}
           disabledMessage="Pick a table to start an order."

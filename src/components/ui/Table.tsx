@@ -33,7 +33,9 @@ const TableHead = forwardRef<HTMLTableCellElement, ThHTMLAttributes<HTMLTableCel
 TableHead.displayName = 'TableHead';
 
 const TableCell = forwardRef<HTMLTableCellElement, TdHTMLAttributes<HTMLTableCellElement>>(({ className, ...props }, ref) => (
-  <td ref={ref} className={cn('px-3 py-3 align-middle sm:px-4', className)} {...props} />
+  // nowrap keeps short values ("Main Course", "$12.99") on one line; the table scrolls
+  // sideways on small screens instead. Long text cells opt out with whitespace-normal.
+  <td ref={ref} className={cn('whitespace-nowrap px-3 py-3 align-middle sm:px-4', className)} {...props} />
 ));
 TableCell.displayName = 'TableCell';
 

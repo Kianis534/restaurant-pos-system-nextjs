@@ -32,6 +32,10 @@ export function usePosCart(options: { restore?: () => OrderItem[] } = {}) {
   const totals = useMemo(() => cartTotals(cart), [cart]);
 
   const available = useCallback((product: Product) => availableToAdd(product, products, cart), [products, cart]);
+  const inCart = useCallback(
+    (productId: string) => cart.reduce((sum, item) => (item.productId === productId ? sum + item.quantity : sum), 0),
+    [cart],
+  );
   /** IDs of cart lines whose menu item has since been deleted. */
   const unavailable = useMemo(() => new Set(findMissingProducts(cart, products).map((i) => i.id)), [cart, products]);
 
@@ -142,6 +146,7 @@ export function usePosCart(options: { restore?: () => OrderItem[] } = {}) {
     notice,
     setNotice,
     available,
+    inCart,
     addProduct,
     setQuantity,
     removeItem,
