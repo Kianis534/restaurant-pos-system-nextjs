@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Category, Discount, DiscountType, Product } from '@/types';
 import { storage } from '@/lib/storage';
 import { todayLocal } from '@/lib/format';
-import { validateDiscount, type Errors } from '@/lib/validation';
+import { clearError, validateDiscount, type Errors } from '@/lib/validation';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
@@ -28,7 +28,10 @@ export function DiscountForm({ discount, products, categories }: { discount?: Di
     target: discount?.target ?? '',
   });
   const [errors, setErrors] = useState<Errors>({});
-  const set = (field: keyof typeof values) => (e: { target: { value: string } }) => setValues((v) => ({ ...v, [field]: e.target.value }));
+  const set = (field: keyof typeof values) => (e: { target: { value: string } }) => {
+    setValues((v) => ({ ...v, [field]: e.target.value }));
+    setErrors((current) => clearError(current, field));
+  };
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -71,7 +74,10 @@ export function DiscountForm({ discount, products, categories }: { discount?: Di
               <Select
                 id="type"
                 value={values.type}
-                onChange={(e) => setValues((v) => ({ ...v, type: e.target.value as DiscountType, target: '' }))}
+                onChange={(e) => {
+                  setValues((v) => ({ ...v, type: e.target.value as DiscountType, target: '' }));
+                  setErrors((current) => clearError(current, 'target'));
+                }}
               >
                 {TYPES.map((t) => (
                   <option key={t.value} value={t.value}>

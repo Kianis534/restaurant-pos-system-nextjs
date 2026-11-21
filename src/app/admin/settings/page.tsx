@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { storage } from '@/lib/storage';
 import { seedSettings } from '@/lib/seed';
 import { toLocalDateKey } from '@/lib/format';
+import { downloadBlob } from '@/lib/download';
 import { useHydrated, useStoredData } from '@/hooks/useStoredData';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Button } from '@/components/ui/Button';
@@ -119,12 +120,7 @@ function DataCard() {
 
   const exportBackup = () => {
     const blob = new Blob([JSON.stringify(storage.exportData(), null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pos-backup-${toLocalDateKey(new Date())}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `pos-backup-${toLocalDateKey(new Date())}.json`);
     setMessage({ tone: 'ok', text: 'Backup downloaded. It contains password hashes, so keep it private.' });
   };
 

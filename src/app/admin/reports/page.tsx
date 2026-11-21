@@ -7,6 +7,7 @@ import { storage } from '@/lib/storage';
 import { formatDate, formatDateTime, formatMoney, toLocalDateKey } from '@/lib/format';
 import { filterOrders, ordersToCsv, summarize, type DateRange } from '@/lib/reports';
 import { paymentLabel } from '@/lib/receipt';
+import { downloadBlob } from '@/lib/download';
 import { useStoredData } from '@/hooks/useStoredData';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { OrderDetailsSheet } from '@/components/admin/OrderDetailsSheet';
@@ -39,9 +40,12 @@ function ReportsPage() {
   const [searchMessage, setSearchMessage] = useState('');
   const [selected, setSelected] = useState<Order | null>(null);
 
+  // If "From" ends up after "To" (easy to do when typing dates), read the range the other way round.
+  const reversed = !!range.from && !!range.to && range.from > range.to;
+  const period = useMemo<DateRange>(() => (reversed ? { from: range.to, to: range.from } : range), [range, reversed]);
   const inRange = useMemo(
-    () => filterOrders(orders, range).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [orders, range],
+    () => filterOrders(orders, period).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [orders, period],
   );
   const summary = useMemo(() => summarize(inRange), [inRange]);
 
@@ -56,12 +60,7 @@ function ReportsPage() {
 
   const exportCsv = () => {
     const blob = new Blob([ordersToCsv(inRange)], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `orders-${range.from || 'start'}-to-${range.to || toLocalDateKey(new Date())}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `orders-${period.from || 'start'}-to-${period.to || toLocalDateKey(new Date())}.csv`);
   };
 
   const presetActive = (p: (typeof PRESETS)[number]) => {
@@ -90,6 +89,11 @@ function ReportsPage() {
             <Field label="To" htmlFor="to">
               <Input id="to" type="date" value={range.to} min={range.from || undefined} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} />
             </Field>
+            {reversed && (
+              <p className="w-full text-sm text-amber-700 sm:w-auto" role="status">
+                Showing {formatDate(`${period.from}T00:00:00`)} to {formatDate(`${period.to}T00:00:00`)}.
+              </p>
+            )}
             <div className="flex flex-wrap gap-1.5">
               {PRESETS.map((p) => (
                 <Button key={p.label} size="sm" variant={presetActive(p) ? 'default' : 'outline'} onClick={() => setRange(p.range())}>

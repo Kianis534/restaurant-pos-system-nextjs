@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import type { Area, Table } from '@/types';
 import { storage } from '@/lib/storage';
-import { nextTableName, validateTable, type Errors } from '@/lib/validation';
+import { clearError, nextTableName, validateTable, type Errors } from '@/lib/validation';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
@@ -19,7 +19,10 @@ export function TableForm({ table, areas, tables }: { table?: Table; areas: Area
   });
   const [errors, setErrors] = useState<Errors>({});
   const suggested = nextTableName(tables);
-  const set = (field: keyof typeof values) => (e: { target: { value: string } }) => setValues((v) => ({ ...v, [field]: e.target.value }));
+  const set = (field: keyof typeof values) => (e: { target: { value: string } }) => {
+    setValues((v) => ({ ...v, [field]: e.target.value }));
+    setErrors((current) => clearError(current, field));
+  };
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();

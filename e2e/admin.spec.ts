@@ -15,6 +15,11 @@ test('menu item: validation, create, stock limit at the till, item discount', as
   await page.getByRole('button', { name: 'Add item' }).click();
   await expect(page.getByText('Another menu item already has this name.')).toBeVisible();
 
+  await page.getByLabel('Price (before tax)').fill('5.555');
+  await page.getByRole('button', { name: 'Add item' }).click();
+  await expect(page.getByText('Use at most two decimal places.')).toBeVisible();
+  await page.getByLabel('Price (before tax)').fill('5');
+
   await page.getByLabel('Name').fill('Tomato Soup');
   await page.getByLabel('Category').selectOption('Starters');
   await expect(page.getByText('Customers pay $5.50 with tax.')).toBeVisible();
@@ -77,6 +82,13 @@ test('employees: create a cashier who can then sign in', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Hello, QA Cashier' })).toBeVisible();
 });
 
+test('employees: an admin cannot change their own role', async ({ page }) => {
+  await login(page, 'admin');
+  await page.goto('admin/employees/edit/?id=user-admin');
+  await expect(page.getByLabel('Role')).toBeDisabled();
+  await expect(page.getByText("You can't change your own role.")).toBeVisible();
+});
+
 test('employees: the signed-in admin cannot delete themselves', async ({ page }) => {
   await login(page, 'admin');
   await page.goto('admin/employees/');
@@ -121,6 +133,14 @@ test('reports reflect a sale and the order can be looked up', async ({ page }) =
 
   await page.goto('admin/dashboard/');
   await expect(page.getByRole('cell', { name: 'ORD-000001' })).toBeVisible();
+});
+
+test('reports read a reversed date range the right way round', async ({ page }) => {
+  await login(page, 'admin');
+  await page.goto('admin/reports/');
+  await page.getByLabel('To').fill('2026-01-01');
+  await page.getByLabel('From').fill('2026-01-31');
+  await expect(page.getByText(/^Showing .+ to .+\.$/)).toBeVisible();
 });
 
 test('reset to demo data signs everyone out', async ({ page }) => {
