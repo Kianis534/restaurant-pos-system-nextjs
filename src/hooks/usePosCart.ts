@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Discount, OrderItem, OrderType, Product, Receipt, Settings, User } from '@/types';
 import { storage } from '@/lib/storage';
 import { cartTotals, priceLine, pricingContext, repriceCart } from '@/lib/pricing';
-import { availableToAdd, deductStock, findStockProblems } from '@/lib/inventory';
+import { availableToAdd, deductStock, findMissingProducts, findStockProblems } from '@/lib/inventory';
 import { buildSale, type PaymentInput } from '@/lib/checkout';
 import { seedSettings } from '@/lib/seed';
 import { useStoredData } from './useStoredData';
@@ -16,17 +16,24 @@ const DEFAULT_SETTINGS: Settings = { ...seedSettings(), receiptHeader: '', recei
 export type CheckoutResult = { ok: true; receipt: Receipt } | { ok: false; error: string };
 
 /** Cart state and checkout shared by the dine-in and takeaway screens. */
-export function usePosCart() {
+export function usePosCart(options: { restore?: () => OrderItem[] } = {}) {
   const products = useStoredData('products', () => storage.getProducts(), NO_PRODUCTS);
   const discounts = useStoredData('discounts', () => storage.getDiscounts(), NO_DISCOUNTS);
   const settings = useStoredData('settings', () => storage.getSettings(), DEFAULT_SETTINGS);
   const ctx = useMemo(() => pricingContext(settings, discounts), [settings, discounts]);
 
-  const [cart, setCart] = useState<OrderItem[]>([]);
+  // The screen only mounts in the browser (pages wait for sign-in), so storage is readable here.
+  const [cart, setCart] = useState<OrderItem[]>(() => {
+    const restored = options.restore?.() ?? [];
+    if (restored.length === 0) return restored;
+    return repriceCart(restored, storage.getProducts(), pricingContext(storage.getSettings(), storage.getDiscounts()));
+  });
   const [notice, setNotice] = useState<string | null>(null);
   const totals = useMemo(() => cartTotals(cart), [cart]);
 
   const available = useCallback((product: Product) => availableToAdd(product, products, cart), [products, cart]);
+  /** IDs of cart lines whose menu item has since been deleted. */
+  const unavailable = useMemo(() => new Set(findMissingProducts(cart, products).map((i) => i.id)), [cart, products]);
 
   const addProduct = useCallback(
     (product: Product) => {
@@ -90,6 +97,11 @@ export function usePosCart() {
     (payment: PaymentInput, meta: { type: OrderType; table?: { id: string; name: string }; employee: User }): CheckoutResult => {
       if (cart.length === 0) return { ok: false, error: 'The order is empty.' };
       const latestProducts = storage.getProducts();
+      const missing = findMissingProducts(cart, latestProducts);
+      if (missing.length) {
+        const names = missing.map((i) => i.productName).join(', ');
+        return { ok: false, error: `${names} ${missing.length === 1 ? 'is' : 'are'} no longer on the menu. Remove ${missing.length === 1 ? 'it' : 'them'} to continue.` };
+      }
       const problems = findStockProblems(cart, latestProducts);
       if (problems.length) {
         const list = problems.map((p) => `${p.productName} (need ${p.needed}, have ${p.inStock})`).join(', ');
@@ -126,6 +138,7 @@ export function usePosCart() {
     ctx,
     cart,
     totals,
+    unavailable,
     notice,
     setNotice,
     available,

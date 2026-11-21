@@ -90,6 +90,37 @@ test('split payments must add up to the total', async ({ page }) => {
   await expect(page.getByText('Cash and card amounts must add up to the total.')).toBeVisible();
 });
 
+test('a takeaway order in progress survives leaving the screen', async ({ page }) => {
+  await login(page, 'cashier');
+  await page.goto('cashier/takeaway/');
+  await addToCart(page, 'Fries', 2);
+  await expect(page.getByTestId('cart-total')).toHaveText('$8.78');
+  await page.goto('cashier/dashboard/');
+  await page.goto('cashier/takeaway/');
+  await expect(page.getByTestId('cart-total')).toHaveText('$8.78');
+});
+
+test('an item deleted from the menu must be removed from a held order before paying', async ({ page }) => {
+  await login(page, 'admin');
+  await page.goto('cashier/dine-in/');
+  await page.getByRole('button', { name: /^T04/ }).click();
+  await addToCart(page, 'Caesar Salad');
+  await addToCart(page, 'Cola');
+
+  await page.goto('admin/products/');
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Delete Caesar Salad' }).click();
+  await expect(page.getByRole('cell', { name: /Caesar Salad/ })).toHaveCount(0);
+
+  await page.goto('cashier/dine-in/');
+  await page.getByRole('button', { name: /^T04/ }).click();
+  await expect(page.getByText('No longer on the menu. Remove it to continue.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Take payment' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Remove Caesar Salad' }).click();
+  await expect(page.getByRole('button', { name: 'Take payment' })).toBeEnabled();
+  await expect(page.getByTestId('cart-total')).toHaveText('$2.75');
+});
+
 test('held takeaway orders can be resumed', async ({ page }) => {
   await login(page, 'cashier');
   await page.goto('cashier/takeaway/');

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { OrderItem, Receipt } from '@/types';
 import withAuth from '@/components/auth/withAuth';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,7 +20,12 @@ const NO_HELD: OrderItem[][] = [];
 
 function TakeawayPage() {
   const { user } = useAuth();
-  const pos = usePosCart();
+  // The order being rung up is kept in storage, so walking away from the screen doesn't lose it.
+  const pos = usePosCart({ restore: () => storage.getTakeawayDraft() });
+  const { cart } = pos;
+  useEffect(() => {
+    storage.saveTakeawayDraft(cart);
+  }, [cart]);
   const held = useStoredData('heldTakeawayOrders', () => storage.getHeldTakeawayOrders(), NO_HELD);
   const [paying, setPaying] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -100,6 +105,7 @@ function TakeawayPage() {
           onQuantity={pos.setQuantity}
           onRemove={pos.removeItem}
           onPay={() => setPaying(true)}
+          unavailable={pos.unavailable}
           actions={
             <div className="grid grid-cols-2 gap-2">
               <Button variant="outline" onClick={holdCurrent}>
