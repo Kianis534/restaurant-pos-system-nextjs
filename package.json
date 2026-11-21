@@ -26,6 +26,7 @@
     "check:links": "node scripts/check-links.mjs",
     "check:scripts": "node scripts/check-scripts.mjs",
     "hash-password": "node scripts/hash-password.mjs",
+    "icons": "node scripts/generate-icons.mjs",
     "check:site": "node scripts/check-links.mjs --site out",
     "screenshots": "node scripts/capture-screenshots.mjs"
   },

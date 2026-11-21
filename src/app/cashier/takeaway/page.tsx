@@ -97,7 +97,7 @@ function TakeawayPage() {
           </CardContent>
         </Card>
 
-        <ProductList className="order-1 lg:order-none" products={pos.products} ctx={pos.ctx} available={pos.available} onAdd={pos.addProduct} />
+        <ProductList className="order-1 lg:order-none" products={pos.products} ctx={pos.ctx} available={pos.available} inCart={pos.inCart} onAdd={pos.addProduct} />
 
         <CartPanel
           className="order-2 lg:order-none"

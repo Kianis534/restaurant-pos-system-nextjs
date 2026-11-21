@@ -10,6 +10,7 @@ import { formatTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useStoredData } from '@/hooks/useStoredData';
 import { Button } from '@/components/ui/Button';
+import { useFeedback } from '@/components/ui/Feedback';
 
 const NO_ORDERS: Order[] = [];
 const NO_PRODUCTS: Product[] = [];
@@ -47,6 +48,7 @@ function KitchenDisplay() {
     return (product.dealItems ?? []).map((id) => products.find((p) => p.id === id)?.name ?? 'Removed item');
   };
   const now = useNow();
+  const { toast } = useFeedback();
 
   const active = useMemo(
     () =>
@@ -58,7 +60,16 @@ function KitchenDisplay() {
 
   const advance = (order: Order) => {
     const step = NEXT_STEP[order.kitchenStatus];
-    if (step) storage.updateOrder(order.id, { kitchenStatus: step.to });
+    if (!step) return;
+    const previous = order.kitchenStatus;
+    storage.updateOrder(order.id, { kitchenStatus: step.to });
+    // Served tickets leave the screen, so make a mis-tap easy to take back.
+    if (step.to === 'served') {
+      toast(`${order.orderNumber} marked as served.`, {
+        tone: 'info',
+        action: { label: 'Undo', onClick: () => storage.updateOrder(order.id, { kitchenStatus: previous }) },
+      });
+    }
   };
 
   return (
@@ -92,7 +103,15 @@ function KitchenDisplay() {
             const minutes = Math.max(0, Math.floor((now - new Date(order.createdAt).getTime()) / 60_000));
             const step = NEXT_STEP[order.kitchenStatus];
             return (
-              <article key={order.id} className="flex flex-col rounded-lg border border-gray-700 bg-gray-800" data-testid="kitchen-ticket">
+              <article
+                key={order.id}
+                className={cn(
+                  'flex flex-col rounded-lg border bg-gray-800',
+                  // New tickets get a glow for their first minute so they're hard to miss.
+                  order.kitchenStatus === 'pending' && minutes === 0 ? 'border-amber-400 ring-2 ring-amber-400/40' : 'border-gray-700',
+                )}
+                data-testid="kitchen-ticket"
+              >
                 <div className="flex items-start justify-between gap-2 border-b border-gray-700 p-4">
                   <div>
                     <h2 className="text-xl font-semibold">{order.orderNumber}</h2>

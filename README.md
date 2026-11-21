@@ -84,7 +84,7 @@ On a phone the POS stacks into one column and a bar at the bottom keeps the runn
 **Point of sale**
 - Dine-in by table, filtered by area (Main Hall, Terrace, ...). A table's order is saved as you go, so switching tables or reloading the page never loses it. Tables with an unpaid tab are highlighted with their running total.
 - Takeaway orders, with any number of orders parked on hold and resumed later.
-- Menu search by name or SKU and category filter chips.
+- Menu search by name or SKU (press `/` to jump to it, `Esc` to clear) and category filter chips. Items already in the order show a count.
 - Live prices that already include discounts and tax, with the original price struck through when a discount applies.
 - Stock checks: sold-out items are disabled, quantities can't go past what's in stock, and stock is checked again at payment.
 - Deals (combos) that take one of each bundled item out of stock.
@@ -94,7 +94,8 @@ On a phone the POS stacks into one column and a bar at the bottom keeps the runn
 
 **Kitchen display**
 - Every paid order becomes a ticket with its items (deal contents listed underneath), table or takeaway, and how long ago it came in. The waiting time turns red after 15 minutes.
-- Updates instantly when an order is paid in another tab on the same device.
+- Updates instantly when an order is paid in another tab on the same device. New tickets glow for their first minute.
+- Marked something served by mistake? The confirmation has an **Undo** button.
 
 **Back office (admin)**
 - Dashboard with today's and all-time revenue, average order, orders still in the kitchen, recent orders and low-stock alerts.
@@ -112,6 +113,8 @@ On a phone the POS stacks into one column and a bar at the bottom keeps the runn
 - Works under a sub-path such as `https://<user>.github.io/<repo>/`.
 - Data from older versions of the app is upgraded automatically on first load, including hashing any plain-text passwords it finds.
 - Responsive from phones to wide screens, keyboard accessible dialogs, labelled form fields.
+- In-app confirm dialogs and toast notifications instead of browser pop-ups; every save and delete gets visible feedback.
+- Its own app icon and a web app manifest, so it can be added to a phone or tablet home screen and opens full screen. Every screen has its own tab title.
 
 ## Tech stack
 
@@ -254,6 +257,7 @@ npm start
 | `npm run check:site` | Every link and asset in the built `out/` folder |
 | `npm run check:scripts` | npm scripts point at real files and match this README |
 | `npm run hash-password -- "..."` | Prints a password hash for `.env.local` |
+| `npm run icons` | Regenerates the PNG app icons from `src/app/icon.svg` |
 | `npm run screenshots` | Regenerates `docs/screenshots/` from a running build |
 
 ## Configuration and your own passwords

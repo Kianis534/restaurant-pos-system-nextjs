@@ -33,6 +33,10 @@ test('takeaway order: cash payment, change, receipt and the kitchen ticket', asy
   await ticket.getByRole('button', { name: 'Mark ready' }).click();
   await ticket.getByRole('button', { name: 'Mark served' }).click();
   await expect(page.getByText('No active orders.', { exact: false })).toBeVisible();
+
+  // A mis-tap on "Mark served" can be undone from the toast.
+  await page.getByTestId('toast').getByRole('button', { name: 'Undo' }).click();
+  await expect(ticket).toContainText('ready');
 });
 
 test('dine-in tab survives a reload, then is paid by card and shows up in bills', async ({ page }) => {
@@ -88,6 +92,22 @@ test('split payments must add up to the total', async ({ page }) => {
   await expect(page.locator('#split-card')).toHaveValue('0.00');
   await page.getByRole('button', { name: 'Confirm payment' }).click();
   await expect(page.getByText('Cash and card amounts must add up to the total.')).toBeVisible();
+});
+
+test('"/" jumps to the menu search and items show how many are in the order', async ({ page, isMobile }) => {
+  await login(page, 'cashier');
+  await page.goto('cashier/takeaway/');
+  await addToCart(page, 'Cola', 2);
+  await expect(page.getByRole('button', { name: /^Cola/ })).toContainText('2 in order');
+  test.skip(isMobile, 'keyboard shortcut is for keyboards');
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('/');
+  await expect(page.getByLabel('Search the menu')).toBeFocused();
+  await page.keyboard.type('lemon');
+  await expect(page.getByRole('button', { name: /^Fresh Lemonade/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Cola/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByLabel('Search the menu')).toHaveValue('');
 });
 
 test('a takeaway order in progress survives leaving the screen', async ({ page }) => {

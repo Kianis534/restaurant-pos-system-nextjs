@@ -37,6 +37,35 @@ for (const role of ['admin', 'cashier', 'kitchen'] as const) {
   });
 }
 
+test('each screen has its own browser tab title', async ({ page }) => {
+  await page.goto('login/');
+  await expect(page).toHaveTitle('Sign in | Restaurant POS');
+  await login(page, 'admin');
+  await expect(page).toHaveTitle('Dashboard | Restaurant POS');
+  await page.goto('admin/products/');
+  await expect(page).toHaveTitle('Menu | Restaurant POS');
+  await page.goto('cashier/dine-in/');
+  await expect(page).toHaveTitle('Dine-in | Restaurant POS');
+});
+
+test('the app icon and install manifest are served', async ({ page, request }) => {
+  await page.goto('login/');
+  const iconHref = await page.locator('link[rel="icon"][type="image/svg+xml"]').getAttribute('href');
+  const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
+  expect(iconHref).toBeTruthy();
+  expect(manifestHref).toBeTruthy();
+  expect((await request.get(new URL(iconHref!, page.url()).href)).ok()).toBe(true);
+
+  const manifestUrl = new URL(manifestHref!, page.url()).href;
+  const manifest = await (await request.get(manifestUrl)).json();
+  expect(manifest).toMatchObject({ name: 'Restaurant POS', display: 'standalone' });
+  for (const icon of manifest.icons as { src: string }[]) {
+    expect((await request.get(new URL(icon.src, manifestUrl).href)).ok(), icon.src).toBe(true);
+  }
+  // start_url must stay inside the site, including on a sub-path.
+  expect(new URL(manifest.start_url, manifestUrl).href).toBe(new URL('./', page.url().replace(/login\/$/, '')).href);
+});
+
 test('edit pages explain when the record does not exist', async ({ page }) => {
   await login(page, 'admin');
   for (const path of ['admin/products/edit/?id=nope', 'admin/employees/edit/?id=nope', 'admin/tables/edit/?id=nope', 'admin/discounts/edit/?id=nope', 'cashier/bills/view/?id=nope']) {

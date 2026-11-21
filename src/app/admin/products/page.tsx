@@ -173,7 +173,7 @@ function MenuPage() {
               {deals.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell className="font-medium">{d.name}</TableCell>
-                  <TableCell className="text-gray-600">{(d.dealItems ?? []).map(nameOf).filter(Boolean).join(', ') || '-'}</TableCell>
+                  <TableCell className="min-w-48 whitespace-normal text-gray-600">{(d.dealItems ?? []).map(nameOf).filter(Boolean).join(', ') || '-'}</TableCell>
                   <TableCell className="text-right">{formatMoney(d.price)}</TableCell>
                   <TableCell className="whitespace-nowrap text-right">
                     <LinkButton href={`/admin/products/deals/edit?id=${encodeURIComponent(d.id)}`} variant="ghost" size="iconSm" aria-label={`Edit ${d.name}`}>
