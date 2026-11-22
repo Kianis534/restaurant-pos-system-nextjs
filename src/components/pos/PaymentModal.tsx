@@ -113,6 +113,9 @@ function PaymentForm({ total, onCancel, onConfirm }: { total: number; onCancel: 
               step="0.01"
               value={tendered}
               onChange={(e) => setTendered(e.target.value)}
+              // Ready to type over: the cashier enters the amount handed over and presses Enter.
+              autoFocus
+              onFocus={(e) => e.currentTarget.select()}
             />
           </Field>
           <div className="flex flex-wrap gap-2">

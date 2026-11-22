@@ -14,7 +14,7 @@ body {
 
 /* react-select (multi-select pickers) */
 .rs__control {
-  @apply min-h-10 rounded-md border-gray-300 shadow-none;
+  @apply min-h-10 rounded-md border-gray-300 text-base shadow-none sm:text-sm;
 }
 .rs__control--is-focused {
   @apply border-blue-500 ring-2 ring-blue-500/40;

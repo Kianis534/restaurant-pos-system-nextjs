@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, UtensilsCrossed } from 'lucide-react';
 import { homePathFor, useAuth } from '@/contexts/AuthContext';
@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) router.replace(homePathFor(user.role));
@@ -34,7 +35,12 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       const result = await login(employeeNo, password);
-      if (!result.success) setError(result.message ?? 'Sign-in failed.');
+      if (!result.success) {
+        setError(result.message ?? 'Sign-in failed.');
+        // Start the password again rather than editing a hidden wrong one.
+        setPassword('');
+        passwordRef.current?.focus();
+      }
       // On success the effect above redirects.
     } catch {
       setError('Sign-in failed. Please try again.');
@@ -73,6 +79,7 @@ export default function LoginPage() {
             </Field>
             <Field label="Password" htmlFor="password">
               <Input
+                ref={passwordRef}
                 id="password"
                 type="password"
                 autoComplete="current-password"
