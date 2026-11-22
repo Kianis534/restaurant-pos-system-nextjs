@@ -107,6 +107,7 @@ On a phone the POS stacks into one column and a bar at the bottom keeps the runn
 - Settings for the tax rate, tax-free items, and the receipt header and footer, with a live receipt preview as you type.
 - Reports for any date range: revenue, order count, average order, tax collected, discounts given, best sellers, payment and order-type breakdown, sales by day, order lookup by number, and CSV export.
 - Backup to a JSON file, restore from it, or reset to the demo data.
+- Void a paid order, with a reason, from the order details or the bill. Its items go back into stock, its kitchen ticket disappears, the receipt prints VOID with the reason, and revenue leaves it out. Reports count voided orders separately and the CSV export includes them, marked. Nothing is deleted, so the history stays auditable. Admins only; cashiers see voided bills but can't void.
 
 **Under the hood**
 - Builds to static files (`next build` with `output: 'export'`), so there's no server to run or pay for.
@@ -176,6 +177,7 @@ restaurant-pos-system-nextjs/
 │   │   ├── reports.ts          # summaries and CSV export
 │   │   ├── receipt.ts          # receipt layout and PDF
 │   │   ├── validation.ts       # form rules
+│   │   ├── voids.ts            # voiding paid orders
 │   │   ├── seed.ts             # demo data
 │   │   └── config.ts / download.ts / format.ts / utils.ts
 │   └── types/index.ts          # shared data types
@@ -360,6 +362,7 @@ There is no HTTP API; the "API" is the typed `StorageService` in [`src/lib/stora
 | `getTables()` / `saveTables(list)` | Tables |
 | `getAreas()` / `saveAreas(list)` | Table areas |
 | `getOrders()` / `saveOrders(list)` / `updateOrder(id, patch)` | Paid orders |
+| `voidOrder(id, { reason, note, by })` | Voids a paid order and its receipt and puts its items back into stock; refuses an order that's already voided |
 | `getReceipts()` / `saveReceipts(list)` | Receipts |
 | `nextOrderNumber()` | Next sequential number, e.g. `ORD-000042` |
 | `getHeldTableOrders()` / `getHeldTableOrder(id)` / `saveHeldTableOrder(id, items)` / `clearHeldTableOrder(id)` | Open dine-in tabs |
@@ -385,7 +388,7 @@ Each collection is a JSON value under its own `localStorage` key. Shapes are def
 | `pos_discounts` | `Discount[]` | `id, name, type ('all' / 'category' / 'item'), percent, startDate, endDate, target?` |
 | `pos_tables` | `Table[]` | `id, name, area ('' means every area), capacity` |
 | `pos_areas` | `Area[]` | `id, name` |
-| `pos_orders` | `Order[]` | Items, `subtotal, discount, tax, total`, `type`, table, cashier, payment details, `kitchenStatus` |
+| `pos_orders` | `Order[]` | Items, `subtotal, discount, tax, total`, `type`, table, cashier, payment details, `kitchenStatus`; voided orders have `status: 'cancelled'` plus `voidedAt, voidedBy, voidReason` |
 | `pos_receipts` | `Receipt[]` | A snapshot of the order as printed |
 | `pos_held_orders` | `Record<tableId, OrderItem[]>` | Open dine-in tabs |
 | `pos_walkin_held_orders` | `OrderItem[][]` | Takeaway orders on hold |
@@ -503,7 +506,7 @@ If you find a security problem, please follow [SECURITY.md](SECURITY.md) rather 
 - Optional backend (Next.js route handlers or a small API with PostgreSQL) so several tills share data and permissions are enforced on the server
 - Table transfers and merging, and splitting a bill by item or by guest
 - Item modifiers and notes for the kitchen ("no onions", extra cheese)
-- Refunds and voids with a reason, shown in reports
+- Partial refunds (single items) on top of whole-order voids
 - Shift open/close with a cash drawer count
 - Charts in the reports and gross profit using item cost
 - Offline-first PWA install with a service worker

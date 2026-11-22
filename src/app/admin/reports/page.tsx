@@ -1,11 +1,11 @@
 'use client';
 import { useMemo, useState, type FormEvent } from 'react';
-import { BadgePercent, DollarSign, Download, Landmark, Receipt as ReceiptIcon, Search, ShoppingCart } from 'lucide-react';
+import { Ban, BadgePercent, DollarSign, Download, Landmark, Receipt as ReceiptIcon, Search, ShoppingCart } from 'lucide-react';
 import type { Order } from '@/types';
 import withAuth from '@/components/auth/withAuth';
 import { storage } from '@/lib/storage';
 import { formatDate, formatDateTime, formatMoney, toLocalDateKey } from '@/lib/format';
-import { filterOrders, ordersToCsv, summarize, type DateRange } from '@/lib/reports';
+import { filterOrders, filterVoided, ordersToCsv, summarize, voidedTotals, type DateRange } from '@/lib/reports';
 import { paymentLabel } from '@/lib/receipt';
 import { downloadBlob } from '@/lib/download';
 import { useStoredData } from '@/hooks/useStoredData';
@@ -48,6 +48,8 @@ function ReportsPage() {
     [orders, period],
   );
   const summary = useMemo(() => summarize(inRange), [inRange]);
+  const voided = useMemo(() => filterVoided(orders, period), [orders, period]);
+  const voidedSum = voidedTotals(voided);
 
   const search = (event: FormEvent) => {
     event.preventDefault();
@@ -59,7 +61,9 @@ function ReportsPage() {
   };
 
   const exportCsv = () => {
-    const blob = new Blob([ordersToCsv(inRange)], { type: 'text/csv;charset=utf-8' });
+    // Voided orders are exported too, marked in the Status column, so the file is a full record.
+    const rows = [...inRange, ...voided].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const blob = new Blob([ordersToCsv(rows)], { type: 'text/csv;charset=utf-8' });
     downloadBlob(blob, `orders-${period.from || 'start'}-to-${period.to || toLocalDateKey(new Date())}.csv`);
   };
 
@@ -74,7 +78,7 @@ function ReportsPage() {
         title="Reports"
         description="Sales for the period you choose."
         actions={
-          <Button variant="outline" onClick={exportCsv} disabled={inRange.length === 0}>
+          <Button variant="outline" onClick={exportCsv} disabled={inRange.length + voided.length === 0}>
             <Download className="h-4 w-4" /> Export CSV
           </Button>
         }
@@ -121,12 +125,18 @@ function ReportsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Revenue" value={formatMoney(summary.revenue)} icon={<DollarSign className="h-4 w-4" />} />
         <StatCard label="Orders" value={summary.orders} icon={<ShoppingCart className="h-4 w-4" />} />
         <StatCard label="Average order" value={formatMoney(summary.average)} icon={<ReceiptIcon className="h-4 w-4" />} />
         <StatCard label="Tax collected" value={formatMoney(summary.tax)} icon={<Landmark className="h-4 w-4" />} />
         <StatCard label="Discounts given" value={formatMoney(summary.discounts)} icon={<BadgePercent className="h-4 w-4" />} />
+        <StatCard
+          label="Voided"
+          value={voidedSum.count}
+          hint={voidedSum.count ? `${formatMoney(voidedSum.amount)} not counted` : 'No voided orders'}
+          icon={<Ban className="h-4 w-4" />}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

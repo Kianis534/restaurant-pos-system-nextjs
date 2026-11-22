@@ -19,6 +19,13 @@ export function receiptRows(receipt: Receipt, settings: Pick<Settings, 'receiptH
   headerLines.forEach((line, i) => rows.push({ kind: 'center', left: line, bold: i === 0 }));
   if (headerLines.length) rows.push({ kind: 'rule' });
 
+  if (receipt.voidedAt) {
+    rows.push({ kind: 'center', left: '*** VOID ***', bold: true });
+    if (receipt.voidReason) rows.push({ kind: 'center', left: receipt.voidReason });
+    rows.push({ kind: 'center', left: `Voided ${formatDateTime(receipt.voidedAt)}${receipt.voidedBy ? ` by ${receipt.voidedBy}` : ''}` });
+    rows.push({ kind: 'rule' });
+  }
+
   rows.push({ kind: 'pair', left: 'Order', right: receipt.orderNumber || receipt.orderId });
   rows.push({ kind: 'pair', left: 'Receipt', right: receipt.id });
   rows.push({ kind: 'pair', left: 'Date', right: formatDateTime(receipt.date) });

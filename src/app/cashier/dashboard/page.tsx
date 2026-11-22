@@ -104,7 +104,7 @@ function CashierDashboard() {
                     )}
                   </TableCell>
                   <TableCell>{order.type === 'dine-in' ? `Dine-in ${order.tableName ?? ''}` : 'Takeaway'}</TableCell>
-                  <TableCell>{capitalize(order.kitchenStatus)}</TableCell>
+                  <TableCell>{order.status === 'cancelled' ? <span className="font-medium text-red-700">Voided</span> : capitalize(order.kitchenStatus)}</TableCell>
                   <TableCell>{formatTime(order.createdAt)}</TableCell>
                   <TableCell className="text-right">{formatMoney(order.total)}</TableCell>
                 </TableRow>

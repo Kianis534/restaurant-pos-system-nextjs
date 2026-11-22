@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterOrders, ordersToCsv, summarize } from '@/lib/reports';
+import { filterOrders, filterVoided, ordersToCsv, summarize, voidedTotals } from '@/lib/reports';
 import { receiptRows } from '@/lib/receipt';
 import { formatMoney, toLocalDateKey } from '@/lib/format';
 import type { Order, Receipt } from '@/types';
@@ -52,6 +52,22 @@ describe('filterOrders', () => {
   });
 });
 
+describe('voided orders', () => {
+  it('are counted separately and kept out of revenue', () => {
+    const voided = filterVoided(orders, { from: '', to: '' });
+    expect(voided.map((o) => o.id)).toEqual(['c']);
+    expect(voidedTotals(voided)).toEqual({ count: 1, amount: 99 });
+    expect(filterVoided(orders, { from: '2026-06-15', to: '2026-06-15' })).toEqual([]);
+    expect(summarize(filterOrders(orders, { from: '', to: '' })).revenue).toBe(27.5);
+  });
+
+  it('are marked in the CSV export with their reason', () => {
+    const row = ordersToCsv([order({ status: 'cancelled', voidReason: 'Payment problem' })]).split('\r\n')[1];
+    expect(row).toContain('"voided"');
+    expect(row).toContain('"Payment problem"');
+  });
+});
+
 describe('summarize', () => {
   it('totals revenue, tax, discounts, payments, order types, items and days', () => {
     const s = summarize(filterOrders(orders, { from: '', to: '' }));
@@ -67,7 +83,7 @@ describe('ordersToCsv', () => {
   it('quotes cells and defuses spreadsheet formulas', () => {
     const csv = ordersToCsv([order({ employeeName: '=HYPERLINK("http://evil")', items: [] })]);
     const [header, row] = csv.split('\r\n');
-    expect(header).toBe('"Order","Date","Type","Table","Cashier","Items","Subtotal","Discount","Tax","Total","Payment"');
+    expect(header).toBe('"Order","Date","Status","Type","Table","Cashier","Items","Subtotal","Discount","Tax","Total","Payment","Void reason"');
     expect(row).toContain(`"'=HYPERLINK(""http://evil"")"`);
   });
 });
@@ -100,6 +116,15 @@ describe('receiptRows', () => {
     expect(text).toContain(`TOTAL|${formatMoney(12.14)}`);
     expect(text).toContain(`Card|${formatMoney(10)}`);
     expect(rows.at(-1)).toEqual({ kind: 'center', left: 'Thanks' });
+  });
+
+  it('prints VOID with the reason at the top of a voided receipt', () => {
+    const rows = receiptRows(
+      { ...receipt, voidedAt: '2026-06-15T13:00:00.000Z', voidedBy: 'Admin User', voidReason: 'Wrong order entered' },
+      { receiptHeader: 'My Diner', receiptFooter: '' },
+    );
+    expect(rows.slice(0, 5).map((r) => r.left)).toEqual(['My Diner', undefined, '*** VOID ***', 'Wrong order entered', expect.stringMatching(/^Voided .+ by Admin User$/)]);
+    expect(receiptRows(receipt, { receiptHeader: '', receiptFooter: '' }).some((r) => r.left === '*** VOID ***')).toBe(false);
   });
 
   it('leaves out the discount line when nothing was discounted', () => {
