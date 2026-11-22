@@ -3,7 +3,7 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import ReactSelect from 'react-select';
 import { Download, RotateCcw, Upload } from 'lucide-react';
-import type { Product, Settings } from '@/types';
+import type { Product, Receipt, Settings } from '@/types';
 import withAuth from '@/components/auth/withAuth';
 import { useAuth } from '@/contexts/AuthContext';
 import { storage } from '@/lib/storage';
@@ -19,10 +19,34 @@ import { Field, Label } from '@/components/ui/Label';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Spinner } from '@/components/ui/Spinner';
 import { useFeedback } from '@/components/ui/Feedback';
+import { ReceiptView } from '@/components/pos/Receipt';
 
 const NO_PRODUCTS: Product[] = [];
 const DEFAULT_SETTINGS: Settings = seedSettings();
 type Option = { value: string; label: string };
+
+/** A made-up sale used only to preview the receipt header and footer while editing them. */
+const SAMPLE_RECEIPT: Receipt = {
+  id: 'REC-000123',
+  orderId: 'sample',
+  orderNumber: 'ORD-000123',
+  orderType: 'dine-in',
+  tableName: 'T04',
+  date: '2026-01-15T19:30:00.000Z',
+  items: [
+    { id: 's1', productId: 's1', productName: 'Classic Burger', quantity: 2, price: 12.99, discount: 0, tax: 1.3, total: 28.58 },
+    { id: 's2', productId: 's2', productName: 'Fresh Lemonade', quantity: 1, price: 3.5, discount: 0, tax: 0.35, total: 3.85 },
+  ],
+  subtotal: 29.48,
+  discount: 0,
+  tax: 2.95,
+  total: 32.43,
+  employeeName: 'Front Desk Cashier',
+  paymentMethod: 'cash',
+  cashAmount: 32.43,
+  cashTendered: 40,
+  changeDue: 7.57,
+};
 
 function SettingsForm({ settings, products }: { settings: Settings; products: Product[] }) {
   const [taxPercent, setTaxPercent] = useState(String(Math.round(settings.taxRate * 10000) / 100));
@@ -87,13 +111,22 @@ function SettingsForm({ settings, products }: { settings: Settings; products: Pr
           <CardTitle>Receipt</CardTitle>
           <CardDescription>Printed at the top and bottom of every receipt. The first header line is printed in bold.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-5 md:grid-cols-2">
-          <Field label="Header" htmlFor="receiptHeader" hint="Restaurant name, address, phone...">
-            <Textarea id="receiptHeader" rows={4} value={header} onChange={(e) => setHeader(e.target.value)} />
-          </Field>
-          <Field label="Footer" htmlFor="receiptFooter">
-            <Textarea id="receiptFooter" rows={4} value={footer} onChange={(e) => setFooter(e.target.value)} />
-          </Field>
+        <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
+          <div className="space-y-5">
+            <Field label="Header" htmlFor="receiptHeader" hint="Restaurant name, address, phone...">
+              <Textarea id="receiptHeader" rows={4} value={header} onChange={(e) => setHeader(e.target.value)} />
+            </Field>
+            <Field label="Footer" htmlFor="receiptFooter">
+              <Textarea id="receiptFooter" rows={4} value={footer} onChange={(e) => setFooter(e.target.value)} />
+            </Field>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium text-gray-900">Preview</p>
+            {/* Updates as you type, with a sample sale. Not saved until you press Save settings. */}
+            <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-2" data-testid="receipt-preview">
+              <ReceiptView receipt={SAMPLE_RECEIPT} settings={{ ...settings, receiptHeader: header, receiptFooter: footer }} printable={false} />
+            </div>
+          </div>
         </CardContent>
       </Card>
 

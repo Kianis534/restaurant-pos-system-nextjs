@@ -8,12 +8,21 @@ import { Button } from '@/components/ui/Button';
 import { useFeedback } from '@/components/ui/Feedback';
 
 /** Thermal-receipt style view. The `print-area` class makes it the only thing that prints. */
-export function ReceiptView({ receipt, settings }: { receipt: Receipt; settings: Settings }) {
+export function ReceiptView({
+  receipt,
+  settings,
+  printable = true,
+}: {
+  receipt: Receipt;
+  settings: Settings;
+  /** False for previews, so printing the page doesn't print a sample receipt. */
+  printable?: boolean;
+}) {
   const rows = receiptRows(receipt, settings);
   return (
     <div
-      className="print-area mx-auto w-full max-w-[80mm] bg-white p-4 font-mono text-[11px] leading-snug text-black"
-      data-testid="receipt"
+      className={cn('mx-auto w-full max-w-[80mm] bg-white p-4 font-mono text-[11px] leading-snug text-black', printable && 'print-area')}
+      data-testid={printable ? 'receipt' : undefined}
     >
       {rows.map((row, i) => {
         if (row.kind === 'rule') return <hr key={i} className="my-1.5 border-t border-dashed border-gray-500" />;

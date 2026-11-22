@@ -82,7 +82,8 @@ export function CartPanel({
                         >
                           <Minus className="h-3.5 w-3.5" />
                         </Button>
-                        <span className="w-8 text-center text-sm font-medium" aria-label="Quantity">
+                        <span className="w-8 text-center text-sm font-medium" data-testid="line-quantity">
+                          <span className="sr-only">Quantity </span>
                           {item.quantity}
                         </span>
                         <Button

@@ -88,7 +88,7 @@ On a phone the POS stacks into one column and a bar at the bottom keeps the runn
 - Live prices that already include discounts and tax, with the original price struck through when a discount applies.
 - Stock checks: sold-out items are disabled, quantities can't go past what's in stock, and stock is checked again at payment.
 - Deals (combos) that take one of each bundled item out of stock.
-- Payments by cash (with quick amounts and change due), card, or split between both. Split amounts balance each other automatically and must add up to the total.
+- Payments by cash (with quick amounts and change due), card, or split between both. The dialog opens ready to type the cash received; Enter confirms. Split amounts balance each other automatically and must add up to the total.
 - Receipts with order number, table, cashier, discounts, tax and payment details. Print them (only the receipt prints, sized for an 80 mm roll) or download a real text PDF.
 - Bills history with search, open any old receipt to reprint it.
 
@@ -104,7 +104,7 @@ On a phone the POS stacks into one column and a bar at the bottom keeps the runn
 - Categories and table areas, with sensible clean-up when one is deleted.
 - Staff accounts with roles (admin, cashier, kitchen), unique employee numbers and hashed passwords. You can't delete yourself or the last admin.
 - Discounts by percentage for the whole menu, one category or one item, with start and end dates. The best matching discount wins; discounts don't stack.
-- Settings for the tax rate, tax-free items, and the receipt header and footer.
+- Settings for the tax rate, tax-free items, and the receipt header and footer, with a live receipt preview as you type.
 - Reports for any date range: revenue, order count, average order, tax collected, discounts given, best sellers, payment and order-type breakdown, sales by day, order lookup by number, and CSV export.
 - Backup to a JSON file, restore from it, or reset to the demo data.
 
