@@ -71,6 +71,10 @@ export interface Order {
   cardAmount?: number;
   cashTendered?: number;
   changeDue?: number;
+  /** Set when an admin voids the order (status becomes 'cancelled'). */
+  voidedAt?: string;
+  voidedBy?: string;
+  voidReason?: string;
 }
 
 export interface Receipt {
@@ -91,6 +95,10 @@ export interface Receipt {
   cardAmount?: number;
   cashTendered?: number;
   changeDue?: number;
+  /** Set when an admin voids the order (status becomes 'cancelled'). */
+  voidedAt?: string;
+  voidedBy?: string;
+  voidReason?: string;
 }
 
 export interface Category {

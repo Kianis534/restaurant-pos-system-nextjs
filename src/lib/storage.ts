@@ -15,6 +15,8 @@ import type {
   User,
 } from '@/types';
 import { hashPassword, isPasswordHash } from './password';
+import { restoreStock } from './inventory';
+import { markVoided, type VoidInput } from './voids';
 import { toLocalDateKey } from './format';
 import {
   seedAreas,
@@ -215,6 +217,9 @@ function normalizeOrder(v: unknown): Order | null {
     const value = optNum(v[key]);
     if (value !== undefined) order[key] = value;
   }
+  if (order.status === 'cancelled') {
+    for (const key of ['voidedAt', 'voidedBy', 'voidReason'] as const) if (str(v[key])) order[key] = str(v[key]);
+  }
   return order;
 }
 
@@ -240,6 +245,11 @@ function normalizeReceipt(v: unknown, orders: Order[]): Receipt | null {
   for (const key of ['cashAmount', 'cardAmount', 'cashTendered', 'changeDue'] as const) {
     const value = optNum(v[key] ?? order?.[key]);
     if (value !== undefined) receipt[key] = value;
+  }
+  // A voided order voids its receipt too, even if only the order record was updated.
+  for (const key of ['voidedAt', 'voidedBy', 'voidReason'] as const) {
+    const value = str(v[key], order?.[key] ?? '');
+    if (value) receipt[key] = value;
   }
   return receipt;
 }
@@ -359,6 +369,25 @@ export class StorageService {
   }
   updateOrder(id: string, patch: Partial<Order>): void {
     this.saveOrders(this.getOrders().map((o) => (o.id === id ? { ...o, ...patch } : o)));
+  }
+
+  /**
+   * Voids a paid order: marks it (and its receipt) as voided and puts its items back into
+   * stock. Throws if the order doesn't exist, is already voided or the reason is missing.
+   */
+  voidOrder(id: string, input: VoidInput): Order {
+    const orders = this.getOrders();
+    const order = orders.find((o) => o.id === id);
+    if (!order) throw new Error('That order no longer exists.');
+    const voided = markVoided(order, input);
+    this.saveOrders(orders.map((o) => (o.id === id ? voided : o)));
+    this.saveReceipts(
+      this.getReceipts().map((r) =>
+        r.orderId === id ? { ...r, voidedAt: voided.voidedAt, voidedBy: voided.voidedBy, voidReason: voided.voidReason } : r,
+      ),
+    );
+    this.saveProducts(restoreStock(this.getProducts(), order.items));
+    return voided;
   }
   getReceipts(): Receipt[] {
     const orders = this.getOrders();

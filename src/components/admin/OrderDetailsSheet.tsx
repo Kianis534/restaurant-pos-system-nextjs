@@ -5,8 +5,11 @@ import { capitalize, formatDateTime, formatMoney } from '@/lib/format';
 import { paymentLabel } from '@/lib/receipt';
 import { useStoredData } from '@/hooks/useStoredData';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/Sheet';
+import { Badge } from '@/components/ui/PageHeader';
+import { VoidedNotice, VoidOrderButton } from './VoidOrder';
 
 const NO_PRODUCTS: Product[] = [];
+const NO_ORDERS: Order[] = [];
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -17,22 +20,29 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function OrderDetailsSheet({ order, onClose }: { order: Order | null; onClose: () => void }) {
+export function OrderDetailsSheet({ order: selected, onClose }: { order: Order | null; onClose: () => void }) {
   const products = useStoredData('products', () => storage.getProducts(), NO_PRODUCTS);
+  const orders = useStoredData('orders', () => storage.getOrders(), NO_ORDERS);
+  // Show the stored copy, so the panel updates the moment the order is voided.
+  const order = selected ? (orders.find((o) => o.id === selected.id) ?? selected) : null;
 
   return (
     <Sheet open={!!order} onOpenChange={(open) => !open && onClose()}>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>Order {order?.orderNumber}</SheetTitle>
+          <SheetTitle className="flex items-center gap-2">
+            Order {order?.orderNumber}
+            {order?.status === 'cancelled' && <Badge tone="red">Voided</Badge>}
+          </SheetTitle>
         </SheetHeader>
         {order && (
           <div className="space-y-5">
+            <VoidedNotice voidedAt={order.voidedAt} voidedBy={order.voidedBy} voidReason={order.voidReason} />
             <dl className="divide-y divide-gray-100">
               <Row label="Time" value={formatDateTime(order.createdAt)} />
               <Row label="Type" value={order.type === 'dine-in' ? `Dine-in (${order.tableName ?? 'table'})` : 'Takeaway'} />
               <Row label="Cashier" value={order.employeeName} />
-              <Row label="Kitchen" value={capitalize(order.kitchenStatus)} />
+              <Row label="Kitchen" value={order.status === 'cancelled' ? 'Removed (voided)' : capitalize(order.kitchenStatus)} />
               <Row label="Payment" value={paymentLabel(order.paymentMethod)} />
               {order.paymentMethod === 'split' && (
                 <>
@@ -78,6 +88,7 @@ export function OrderDetailsSheet({ order, onClose }: { order: Order | null; onC
                 <dd>{formatMoney(order.total)}</dd>
               </div>
             </dl>
+            <VoidOrderButton order={order} className="w-full" />
           </div>
         )}
       </SheetContent>

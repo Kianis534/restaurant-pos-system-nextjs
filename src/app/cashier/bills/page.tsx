@@ -11,7 +11,7 @@ import { useHydrated, useStoredData } from '@/hooks/useStoredData';
 import { RoleLayout } from '@/components/layout/RoleLayout';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { Badge, PageHeader } from '@/components/ui/PageHeader';
 import { Spinner } from '@/components/ui/Spinner';
 
 const NO_RECEIPTS: Receipt[] = [];
@@ -66,7 +66,10 @@ function BillsPage() {
                 className="block rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-gray-900">{r.orderNumber || r.id}</span>
+                  <span className="flex items-center gap-2 font-semibold text-gray-900">
+                    {r.orderNumber || r.id}
+                    {r.voidedAt && <Badge tone="red">Voided</Badge>}
+                  </span>
                   <span className="font-semibold text-gray-900">{formatMoney(r.total)}</span>
                 </div>
                 <p className="mt-1 text-sm text-gray-600">{formatDateTime(r.date)}</p>

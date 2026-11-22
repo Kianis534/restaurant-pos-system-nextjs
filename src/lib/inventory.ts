@@ -70,6 +70,12 @@ export function findMissingProducts(cart: OrderItem[], products: Product[]): Ord
   return cart.filter((item) => !products.some((p) => p.id === item.productId));
 }
 
+/** Returns a new product list with the quantities of a voided order put back. Deleted products are skipped. */
+export function restoreStock(products: Product[], items: Pick<OrderItem, 'productId' | 'quantity'>[]): Product[] {
+  const usage = stockUsage(items, products);
+  return products.map((p) => (usage.has(p.id) ? { ...p, quantity: p.quantity + (usage.get(p.id) ?? 0) } : p));
+}
+
 /** Returns a new product list with the sold quantities taken off. */
 export function deductStock(products: Product[], cart: OrderItem[]): Product[] {
   const usage = stockUsage(cart, products);

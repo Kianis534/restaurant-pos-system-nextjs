@@ -9,12 +9,23 @@ export interface DateRange {
   to: string;
 }
 
+function inRange(order: Order, range: DateRange): boolean {
+  const day = toLocalDateKey(new Date(order.createdAt));
+  return (!range.from || day >= range.from) && (!range.to || day <= range.to);
+}
+
+/** Completed (not voided) orders placed in the range. These are what revenue counts. */
 export function filterOrders(orders: Order[], range: DateRange): Order[] {
-  return orders.filter((o) => {
-    if (o.status !== 'completed') return false;
-    const day = toLocalDateKey(new Date(o.createdAt));
-    return (!range.from || day >= range.from) && (!range.to || day <= range.to);
-  });
+  return orders.filter((o) => o.status === 'completed' && inRange(o, range));
+}
+
+/** Voided orders placed in the range. */
+export function filterVoided(orders: Order[], range: DateRange): Order[] {
+  return orders.filter((o) => o.status === 'cancelled' && inRange(o, range));
+}
+
+export function voidedTotals(voided: Order[]): { count: number; amount: number } {
+  return { count: voided.length, amount: roundMoney(voided.reduce((sum, o) => sum + o.total, 0)) };
 }
 
 export interface SalesSummary {
@@ -86,10 +97,11 @@ function csvCell(value: string | number | undefined): string {
 }
 
 export function ordersToCsv(orders: Order[]): string {
-  const header = ['Order', 'Date', 'Type', 'Table', 'Cashier', 'Items', 'Subtotal', 'Discount', 'Tax', 'Total', 'Payment'];
+  const header = ['Order', 'Date', 'Status', 'Type', 'Table', 'Cashier', 'Items', 'Subtotal', 'Discount', 'Tax', 'Total', 'Payment', 'Void reason'];
   const rows = orders.map((o) => [
     o.orderNumber,
     o.createdAt,
+    o.status === 'cancelled' ? 'voided' : 'completed',
     o.type,
     o.tableName ?? '',
     o.employeeName,
@@ -99,6 +111,7 @@ export function ordersToCsv(orders: Order[]): string {
     o.tax.toFixed(2),
     o.total.toFixed(2),
     o.paymentMethod,
+    o.voidReason ?? '',
   ]);
   return [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
 }
